@@ -1,0 +1,48 @@
+ApiError: Invalid email or password
+    at Object.loginUser (D:\TMS_Hospital\backend\src\modules\auth\auth.service.js:95:11)
+    at async D:\TMS_Hospital\backend\src\modules\auth\auth.controller.js:17:18 {
+  statusCode: 401
+}
+Error: Route not found: /favicon.ico
+    at notFoundHandler (D:\TMS_Hospital\backend\src\middlewares\notFoundHandler.js:4:17)
+    at Layer.handle [as handle_request] (D:\TMS_Hospital\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (D:\TMS_Hospital\backend\node_modules\express\lib\router\index.js:328:13)
+    at D:\TMS_Hospital\backend\node_modules\express\lib\router\index.js:286:9
+    at router.process_params (D:\TMS_Hospital\backend\node_modules\express\lib\router\index.js:346:12)
+    at next (D:\TMS_Hospital\backend\node_modules\express\lib\router\index.js:280:10)
+    at logger (D:\TMS_Hospital\backend\node_modules\morgan\index.js:144:5)
+    at Layer.handle [as handle_request] (D:\TMS_Hospital\backend\node_modules\express\lib\router\layer.js:95:5)
+    at trim_prefix (D:\TMS_Hospital\backend\node_modules\express\lib\router\index.js:328:13)
+    at D:\TMS_Hospital\backend\node_modules\express\lib\router\index.js:286:9 {
+  statusCode: 404
+}
+ApiError: A department with the same unique value already exists
+    at handlePrismaError (D:\TMS_Hospital\backend\src\utils\masterServiceFactory.js:37:11)
+    at Object.create (D:\TMS_Hospital\backend\src\utils\masterServiceFactory.js:80:9)
+    at async create (D:\TMS_Hospital\backend\src\utils\createMasterController.js:11:18) {
+  statusCode: 409
+}
+ApiError: A department with the same unique value already exists
+    at handlePrismaError (D:\TMS_Hospital\backend\src\utils\masterServiceFactory.js:37:11)
+    at Object.create (D:\TMS_Hospital\backend\src\utils\masterServiceFactory.js:80:9)
+    at async create (D:\TMS_Hospital\backend\src\utils\createMasterController.js:11:18) {
+  statusCode: 409
+}
+ApiError: Email is already registered
+    at Object.registerUser (D:\TMS_Hospital\backend\src\modules\auth\auth.service.js:62:11)
+    at async D:\TMS_Hospital\backend\src\modules\auth\auth.controller.js:7:16 {
+  statusCode: 409
+}
+ApiError: id must be a valid positive integer
+    at parsePositiveInt (D:\TMS_Hospital\backend\src\utils\parsePositiveInt.js:12:11)
+    at Object.addAttachment (D:\TMS_Hospital\backend\src\modules\ticket\ticketAttachment.service.js:14:26)
+    at D:\TMS_Hospital\backend\src\modules\ticket\ticketAttachment.controller.js:7:46
+    at D:\TMS_Hospital\backend\src\utils\asyncHandler.js:2:19
+    at Layer.handle [as handle_request] (D:\TMS_Hospital\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (D:\TMS_Hospital\backend\node_modules\express\lib\router\route.js:149:13)
+    at done (D:\TMS_Hospital\backend\node_modules\multer\lib\make-middleware.js:47:7)
+    at indicateDone (D:\TMS_Hospital\backend\node_modules\multer\lib\make-middleware.js:51:68)
+    at D:\TMS_Hospital\backend\node_modules\multer\lib\make-middleware.js:157:11
+    at WriteStream.<anonymous> (D:\TMS_Hospital\backend\node_modules\multer\storage\disk.js:43:9) {
+  statusCode: 400
+}

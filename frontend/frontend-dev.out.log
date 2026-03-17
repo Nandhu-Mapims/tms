@@ -1,0 +1,16 @@
+
+> tms-hospital-frontend@1.0.0 dev
+> vite --host 0.0.0.0
+
+
+  [32m[1mVITE[22m v6.4.1[39m  [2mready in [0m[1m279[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.101.134:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://172.19.224.1:[1m5173[22m/[39m
+[2m12:21:39 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/context/AuthContext.jsx, /src/pages/admin/UserManagementPage.jsx[22m
+[2m12:21:39 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/admin/UserManagementPage.jsx[22m
+[2m12:21:39 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [33mhmr invalidate [39m[2m/src/context/AuthContext.jsx[22m Could not Fast Refresh ("AuthContext" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[2m12:21:39 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/app/App.jsx, /src/components/auth/ProtectedRoute.jsx, /src/pages/admin/DepartmentsPage.jsx, /src/pages/admin/LocationsPage.jsx, /src/pages/admin/CategoriesPage.jsx, /src/pages/dashboard/DashboardPage.jsx, /src/pages/admin/SubcategoriesPage.jsx, /src/pages/tickets/TicketListPage.jsx, /src/pages/admin/SlaSettingsPage.jsx, /src/pages/auth/LoginPage.jsx, /src/pages/tickets/TicketDetailsPage.jsx, /src/components/layout/TopNavbar.jsx, /src/components/layout/Sidebar.jsx[22m
+[2m12:30:13 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/admin/EntityManagementPage.jsx[22m
+[2m12:30:13 pm[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/admin/UserManagementPage.jsx[22m

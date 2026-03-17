@@ -1,0 +1,225 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  HELPDESK
+  TECHNICIAN
+  HOD
+  REQUESTER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketStatus {
+  NEW
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  ESCALATED
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
+model User {
+  id                  Int                 @id @default(autoincrement())
+  fullName            String
+  email               String              @unique
+  phone               String?
+  password            String
+  role                Role                @default(REQUESTER)
+  departmentId        Int?
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  department          Department?         @relation(fields: [departmentId], references: [id])
+  requestedTickets    Ticket[]            @relation("RequesterTickets")
+  assignedTickets     Ticket[]            @relation("AssignedTickets")
+  ticketComments      TicketComment[]
+  ticketActivityLogs  TicketActivityLog[]
+  uploadedAttachments TicketAttachment[]  @relation("UploadedAttachments")
+
+  @@map("users")
+}
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+  tickets     Ticket[]
+
+  @@map("departments")
+}
+
+model Category {
+  id            Int           @id @default(autoincrement())
+  name          String        @unique
+  code          String        @unique
+  description   String?
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  subcategories Subcategory[]
+  tickets       Ticket[]
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int
+  name        String
+  code        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  tickets     Ticket[]
+
+  @@unique([categoryId, name])
+  @@unique([categoryId, code])
+  @@map("subcategories")
+}
+
+model Location {
+  id          Int      @id @default(autoincrement())
+  block       String
+  floor       String?
+  ward        String?
+  room        String?
+  unit        String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tickets     Ticket[]
+
+  @@map("locations")
+}
+
+model SLAConfig {
+  id                   Int      @id @default(autoincrement())
+  priority             Priority @unique
+  firstResponseMinutes Int
+  resolutionMinutes    Int
+  escalationMinutes    Int
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("sla_configs")
+}
+
+model Ticket {
+  id               Int                 @id @default(autoincrement())
+  ticketNumber     String              @unique
+  title            String
+  description      String
+  departmentId     Int
+  categoryId       Int
+  subcategoryId    Int
+  locationId       Int
+  assetName        String?
+  assetId          String?
+  priority         Priority
+  status           TicketStatus        @default(NEW)
+  requesterId      Int
+  requesterContact String
+  assignedTeam     String?
+  assignedToId     Int?
+  dueAt            DateTime?
+  firstRespondedAt DateTime?
+  escalatedAt      DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  isOverdue        Boolean             @default(false)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  department       Department          @relation(fields: [departmentId], references: [id])
+  category         Category            @relation(fields: [categoryId], references: [id])
+  subcategory      Subcategory         @relation(fields: [subcategoryId], references: [id])
+  location         Location            @relation(fields: [locationId], references: [id])
+  requester        User                @relation("RequesterTickets", fields: [requesterId], references: [id])
+  assignedTo       User?               @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  comments         TicketComment[]
+  activityLogs     TicketActivityLog[]
+  attachments      TicketAttachment[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([departmentId])
+  @@index([categoryId])
+  @@index([assignedToId])
+  @@index([requesterId])
+  @@index([createdAt])
+  @@index([isOverdue])
+  @@index([escalatedAt])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         Int      @id @default(autoincrement())
+  ticketId   Int
+  userId     Int
+  comment    String
+  isInternal Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_comments")
+}
+
+model TicketActivityLog {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  userId    Int
+  action    String
+  oldValue  String?  @db.Text
+  newValue  String?  @db.Text
+  remarks   String?  @db.Text
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_activity_logs")
+}
+
+model TicketAttachment {
+  id           Int      @id @default(autoincrement())
+  ticketId     Int
+  uploadedById Int
+  originalName String
+  fileName     String   @unique
+  filePath     String
+  mimeType     String
+  fileSize     Int
+  createdAt    DateTime @default(now())
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedBy   User     @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_attachments")
+}

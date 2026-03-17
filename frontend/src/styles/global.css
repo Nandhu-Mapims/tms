@@ -1,0 +1,238 @@
+﻿:root {
+  color-scheme: light;
+  --app-bg: #f3f7fb;
+  --shell-border: #d7e2ec;
+  --sidebar-width: 292px;
+  --brand-blue: #0d6efd;
+  --brand-blue-soft: rgba(13, 110, 253, 0.12);
+  --text-muted: #637487;
+  --surface: #ffffff;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(180deg, #eef5fb 0%, #f7fafc 100%);
+  color: #1d2a36;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.bg-app-shell {
+  background: linear-gradient(180deg, #edf4fa 0%, #f8fbfd 100%);
+}
+
+.text-bg-primary-soft {
+  background-color: var(--brand-blue-soft);
+}
+
+.login-page {
+  background:
+    radial-gradient(circle at top left, rgba(13, 110, 253, 0.18), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(25, 135, 84, 0.16), transparent 28%),
+    linear-gradient(180deg, #edf4fb 0%, #f8fafc 100%);
+}
+
+.login-card {
+  border-radius: 28px;
+}
+
+.login-brand-panel {
+  background: linear-gradient(160deg, #0b5ed7 0%, #0d6efd 45%, #3b8bfd 100%);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  background: var(--app-bg);
+}
+
+.app-sidebar {
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.sidebar-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef4ff;
+}
+
+.app-nav-link {
+  color: #32475a;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  background: transparent;
+}
+
+.app-nav-link:hover {
+  background: #f2f7fb;
+  color: #0d6efd;
+}
+
+.app-nav-link.active {
+  background: #e8f1ff;
+  color: #0d6efd;
+  font-weight: 600;
+}
+
+.app-content-wrapper {
+  min-width: 0;
+}
+
+.top-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-content {
+  background: transparent;
+}
+
+.hero-card {
+  border-radius: 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.dashboard-stat-panel {
+  background: #f7fbff;
+  border: 1px solid #e1ecf5;
+}
+
+.table th {
+  white-space: nowrap;
+}
+
+.modal-backdrop-soft {
+  background: rgba(18, 30, 42, 0.36);
+}
+
+.timeline {
+  position: relative;
+}
+
+.timeline-item {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0 !important;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: 0.2rem;
+  top: 0.8rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: var(--brand-blue);
+  box-shadow: 0 0 0 6px rgba(13, 110, 253, 0.12);
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 0.62rem;
+  top: 1.5rem;
+  bottom: -0.4rem;
+  width: 2px;
+  background: #dce7f1;
+}
+
+.timeline-item:last-child::before {
+  display: none;
+}
+
+.timeline-content {
+  background: #fff;
+}
+
+.toast-stack {
+  z-index: 1080;
+  max-width: min(92vw, 360px);
+}
+
+.toast-stack .toast {
+  width: 100%;
+  background: #fff;
+}
+
+.toast-success {
+  border-left: 4px solid #198754;
+}
+
+.toast-danger {
+  border-left: 4px solid #dc3545;
+}
+
+.toast-warning {
+  border-left: 4px solid #ffc107;
+}
+
+.toast-primary {
+  border-left: 4px solid #0d6efd;
+}
+
+.admin-table td {
+  vertical-align: middle;
+}
+
+.app-nav-scroll {
+  overflow: auto;
+}
+
+@media (max-width: 991.98px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    min-height: auto;
+    position: relative;
+    border-bottom: 1px solid var(--shell-border);
+  }
+
+  .app-nav-scroll {
+    flex-direction: row !important;
+    flex-wrap: nowrap;
+    padding-bottom: 0.25rem;
+  }
+
+  .app-nav-link {
+    min-width: max-content;
+  }
+
+  .app-content {
+    padding: 1.25rem !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .login-card {
+    border-radius: 22px;
+  }
+
+  .table-responsive {
+    font-size: 0.92rem;
+  }
+
+  .toast-stack {
+    left: 0;
+    right: 0;
+    max-width: none;
+  }
+
+  .toast-stack .toast {
+    width: auto;
+  }
+}
