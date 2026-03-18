@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const { Role } = require('@prisma/client');
+const { Role } = require('../../../generated/prisma');
 const { StatusCodes } = require('http-status-codes');
 const { prisma } = require('../../config/database');
 const { env } = require('../../config');
@@ -39,26 +39,36 @@ const normalizeDepartmentId = (departmentId) => {
 };
 
 const registerUser = async (payload) => {
-  const { fullName, email, phone, password, role, departmentId } = payload;
+  const { fullName, empId, email, phone, password, role, departmentId } = payload;
 
-  if (!fullName || !email || !password || !role) {
+  if (!fullName || !empId || !password || !role) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      'fullName, email, password, and role are required to create a hospital user account'
+      'fullName, empId, password, and role are required to create a hospital user account'
     );
   }
 
   validatePassword(password);
   validateRole(role);
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmpId = empId.trim();
+  const normalizedEmail = email ? email.trim().toLowerCase() : null;
   const normalizedDepartmentId = normalizeDepartmentId(departmentId);
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
-  });
+  const [existingEmpId, existingEmail] = await Promise.all([
+    prisma.user.findUnique({ where: { empId: normalizedEmpId } }),
+    normalizedEmail
+      ? prisma.user.findUnique({
+          where: { email: normalizedEmail },
+        })
+      : null,
+  ]);
 
-  if (existingUser) {
+  if (existingEmpId) {
+    throw new ApiError(StatusCodes.CONFLICT, 'Employee ID is already registered');
+  }
+
+  if (existingEmail) {
     throw new ApiError(StatusCodes.CONFLICT, 'Email is already registered');
   }
 
@@ -67,6 +77,7 @@ const registerUser = async (payload) => {
   const user = await prisma.user.create({
     data: {
       fullName: fullName.trim(),
+      empId: normalizedEmpId,
       email: normalizedEmail,
       phone: phone ? phone.trim() : null,
       password: hashedPassword,
@@ -79,20 +90,20 @@ const registerUser = async (payload) => {
 };
 
 const loginUser = async (payload) => {
-  const { email, password } = payload;
+  const { empId, password } = payload;
 
-  if (!email || !password) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Email and password are required');
+  if (!empId || !password) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Employee ID and password are required');
   }
 
-  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedEmpId = empId.trim();
 
   const user = await prisma.user.findUnique({
-    where: { email: normalizedEmail },
+    where: { empId: normalizedEmpId },
   });
 
   if (!user) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid email or password');
+    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid employee ID or password');
   }
 
   if (!user.isActive) {
@@ -102,7 +113,7 @@ const loginUser = async (payload) => {
   const isPasswordValid = await bcrypt.compare(password, user.password);
 
   if (!isPasswordValid) {
-    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid email or password');
+    throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid employee ID or password');
   }
 
   const token = generateToken({

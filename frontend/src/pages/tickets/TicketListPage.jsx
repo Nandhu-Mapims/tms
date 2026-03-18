@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
@@ -88,7 +88,7 @@ function TicketListPage() {
     setFilters(initialFilters);
   };
 
-  const actions = user?.role === 'REQUESTER' ? [<Link key="create" to="/tickets/create" className="btn btn-primary">Create Ticket</Link>] : null;
+  const actions = [<Link key="create" to="/tickets/create" className="btn btn-primary">Create Ticket</Link>];
   const activeFilterCount = ['search', 'status', 'priority', 'categoryId', 'departmentId', 'assignedToId', 'startDate', 'endDate']
     .filter((key) => Boolean(filters[key])).length;
 
@@ -122,11 +122,9 @@ function TicketListPage() {
           title="No tickets found"
           description="There are no tickets matching the selected filters."
           action={
-            user?.role === 'REQUESTER' ? (
-              <Link to="/tickets/create" className="btn btn-primary">
-                Create Ticket
-              </Link>
-            ) : null
+            <Link to="/tickets/create" className="btn btn-primary">
+              Create Ticket
+            </Link>
           }
         />
       )}

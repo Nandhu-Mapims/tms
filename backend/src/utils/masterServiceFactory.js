@@ -1,5 +1,5 @@
 const { StatusCodes } = require('http-status-codes');
-const { Role } = require('@prisma/client');
+const { Role } = require('../../generated/prisma');
 const { prisma } = require('../config/database');
 const ApiError = require('./ApiError');
 const parseBoolean = require('./parseBoolean');

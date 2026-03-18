@@ -1,5 +1,5 @@
-﻿const express = require('express');
-const { Role } = require('@prisma/client');
+const express = require('express');
+const { Role } = require('../../generated/prisma');
 const asyncHandler = require('./asyncHandler');
 const { protect, authorizeRoles } = require('../middlewares/auth.middleware');
 

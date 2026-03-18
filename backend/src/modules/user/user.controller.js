@@ -1,7 +1,17 @@
-﻿const { StatusCodes } = require('http-status-codes');
+const { StatusCodes } = require('http-status-codes');
 const asyncHandler = require('../../utils/asyncHandler');
 const sendResponse = require('../../utils/sendResponse');
 const userService = require('./user.service');
+
+const getAssignableUsers = asyncHandler(async (req, res) => {
+  const data = await userService.getAssignableUsers();
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    message: 'Assignable users fetched successfully',
+    data,
+  });
+});
 
 const getUsers = asyncHandler(async (req, res) => {
   const data = await userService.getUsers(req.query);
@@ -48,6 +58,7 @@ const updateUserStatus = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  getAssignableUsers,
   getUsers,
   getUserById,
   updateUser,

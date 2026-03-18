@@ -1,4 +1,4 @@
-const { Role, TicketStatus } = require('@prisma/client');
+const { Role, TicketStatus } = require('../../../generated/prisma');
 const { StatusCodes } = require('http-status-codes');
 const { prisma } = require('../../config/database');
 const ApiError = require('../../utils/ApiError');
@@ -22,7 +22,11 @@ const startOfMonth = (year, monthIndex) => new Date(year, monthIndex, 1, 0, 0, 0
 const endOfMonth = (year, monthIndex) => new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
 
 const ensureDashboardAccess = (user) => {
-  if (DASHBOARD_FULL_ACCESS_ROLES.includes(user.role) || user.role === Role.REQUESTER) {
+  if (
+    DASHBOARD_FULL_ACCESS_ROLES.includes(user.role) ||
+    user.role === Role.REQUESTER ||
+    user.role === Role.TECHNICIAN
+  ) {
     return;
   }
 
@@ -36,6 +40,8 @@ const buildScopedWhere = (user, filters = {}) => {
 
   if (user.role === Role.REQUESTER) {
     where.requesterId = user.id;
+  } else if (user.role === Role.TECHNICIAN) {
+    where.assignedToId = user.id;
   }
 
   return where;

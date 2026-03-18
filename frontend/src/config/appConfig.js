@@ -1,4 +1,4 @@
-﻿export const APP_NAME = 'TMS Hospital';
+export const APP_NAME = 'TMS Hospital';
 export const APP_SUBTITLE = 'Hospital Ticket Management System';
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 export const API_PUBLIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
@@ -31,7 +31,7 @@ export const NAV_ITEMS = [
     label: 'Create Ticket',
     icon: 'bi-plus-square',
     path: '/tickets/create',
-    roles: ['REQUESTER'],
+    roles: ['ADMIN', 'HELPDESK', 'TECHNICIAN', 'HOD', 'REQUESTER'],
   },
   {
     key: 'departments',

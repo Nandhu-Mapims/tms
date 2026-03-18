@@ -1,5 +1,5 @@
-﻿const bcrypt = require('bcryptjs');
-const { Role } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const { Role } = require('../../../generated/prisma');
 const { StatusCodes } = require('http-status-codes');
 const { prisma } = require('../../config/database');
 const { env } = require('../../config');
@@ -57,6 +57,25 @@ const ensureDepartmentExists = async (departmentId) => {
   if (!department) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected department does not exist');
   }
+};
+
+const ASSIGNABLE_ROLES = [Role.TECHNICIAN];
+
+const getAssignableUsers = async () => {
+  const users = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: ASSIGNABLE_ROLES },
+    },
+    select: {
+      id: true,
+      fullName: true,
+      email: true,
+      role: true,
+    },
+    orderBy: { fullName: 'asc' },
+  });
+  return users;
 };
 
 const getUsers = async (query) => {
@@ -131,7 +150,9 @@ const updateUser = async (id, payload, currentUser) => {
   }
 
   validateRole(payload.role);
-  validatePassword(payload.password);
+  if (payload.password !== undefined && payload.password !== '') {
+    validatePassword(payload.password);
+  }
 
   const departmentId = payload.departmentId === undefined ? undefined : normalizeDepartmentId(payload.departmentId);
   if (departmentId !== undefined) {
@@ -216,6 +237,7 @@ const updateUserStatus = async (id, payload, currentUser) => {
 };
 
 module.exports = {
+  getAssignableUsers,
   getUsers,
   getUserById,
   updateUser,

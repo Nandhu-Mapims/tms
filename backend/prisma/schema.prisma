@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -38,6 +39,7 @@ enum TicketStatus {
 model User {
   id                  Int                 @id @default(autoincrement())
   fullName            String
+  empId               String              @unique
   email               String              @unique
   phone               String?
   password            String

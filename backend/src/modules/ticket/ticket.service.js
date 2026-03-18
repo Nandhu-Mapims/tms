@@ -1,4 +1,4 @@
-﻿const { Prisma, Priority, Role, TicketStatus } = require('@prisma/client');
+const { Prisma, Priority, Role, TicketStatus } = require('../../../generated/prisma');
 const { StatusCodes } = require('http-status-codes');
 const { prisma } = require('../../config/database');
 const ApiError = require('../../utils/ApiError');
@@ -38,10 +38,8 @@ const validateNonEmptyString = (value, fieldName) => {
   return normalized;
 };
 
-const ensureCanCreateTicket = (user) => {
-  if (user.role !== Role.REQUESTER) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Only hospital requesters can create tickets in this phase');
-  }
+const ensureCanCreateTicket = () => {
+  /* Any authenticated user may create a ticket. */
 };
 
 const ensureNotClosedForEdit = (ticket) => {
@@ -169,7 +167,7 @@ const createTicketTx = async (payload, requester) => {
 };
 
 const createTicket = async (payload, requester) => {
-  ensureCanCreateTicket(requester);
+  ensureCanCreateTicket();
 
   const maxAttempts = 3;
 

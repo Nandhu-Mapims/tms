@@ -1,4 +1,4 @@
-const { Priority } = require('@prisma/client');
+const { Priority } = require('../../../generated/prisma');
 const { StatusCodes } = require('http-status-codes');
 const { createMasterService, buildSLAInput } = require('../../utils/masterServiceFactory');
 const ApiError = require('../../utils/ApiError');

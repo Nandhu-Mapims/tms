@@ -1,20 +1,42 @@
-﻿import { useEffect, useState } from 'react';
-import { validatePositiveInteger } from '../../utils/validators';
+import { useEffect, useState } from 'react';
+import { getAssignableUsersRequest } from '../../services/authService';
 
 function AssignTicketModal({ show, ticket, onClose, onSubmit, isSubmitting }) {
   const [formState, setFormState] = useState({
     assignedTeam: '',
     assignedToId: '',
   });
+  const [assignableUsers, setAssignableUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     setFormState({
-      assignedTeam: ticket?.assignedTeam || '',
-      assignedToId: ticket?.assignedToId || '',
+      assignedTeam: ticket?.assignedTeam ?? '',
+      assignedToId: ticket?.assignedToId ?? '',
     });
     setErrorMessage('');
   }, [ticket]);
+
+  useEffect(() => {
+    if (!show) {
+      return;
+    }
+
+    const loadAssignableUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const response = await getAssignableUsersRequest();
+        setAssignableUsers(response?.data ?? []);
+      } catch {
+        setAssignableUsers([]);
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+
+    loadAssignableUsers();
+  }, [show]);
 
   if (!show) {
     return null;
@@ -23,23 +45,18 @@ function AssignTicketModal({ show, ticket, onClose, onSubmit, isSubmitting }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!String(formState.assignedTeam).trim() && !String(formState.assignedToId).trim()) {
-      setErrorMessage('Provide at least an assigned team or a technician user ID.');
-      return;
-    }
+    const team = String(formState.assignedTeam ?? '').trim();
+    const userId = formState.assignedToId === '' || formState.assignedToId == null ? null : Number(formState.assignedToId);
 
-    if (String(formState.assignedToId).trim()) {
-      const userIdError = validatePositiveInteger(formState.assignedToId, 'Technician User ID');
-      if (userIdError) {
-        setErrorMessage(userIdError);
-        return;
-      }
+    if (!team && (userId == null || Number.isNaN(userId) || userId <= 0)) {
+      setErrorMessage('Provide at least an assigned team or select a technician.');
+      return;
     }
 
     setErrorMessage('');
     await onSubmit({
-      assignedTeam: formState.assignedTeam.trim(),
-      assignedToId: formState.assignedToId ? Number(formState.assignedToId) : null,
+      assignedTeam: team,
+      assignedToId: userId && Number.isFinite(userId) ? userId : null,
     });
   };
 
@@ -50,7 +67,7 @@ function AssignTicketModal({ show, ticket, onClose, onSubmit, isSubmitting }) {
           <form onSubmit={handleSubmit} noValidate>
             <div className="modal-header">
               <h2 className="modal-title fs-5">{ticket?.assignedToId ? 'Reassign Ticket' : 'Assign Ticket'}</h2>
-              <button type="button" className="btn-close" onClick={onClose}></button>
+              <button type="button" className="btn-close" onClick={onClose} aria-label="Close"></button>
             </div>
             <div className="modal-body d-grid gap-3">
               <div>
@@ -59,30 +76,51 @@ function AssignTicketModal({ show, ticket, onClose, onSubmit, isSubmitting }) {
                   type="text"
                   className="form-control"
                   value={formState.assignedTeam}
-                  onChange={(event) => {
-                    setFormState((prev) => ({ ...prev, assignedTeam: event.target.value }));
+                  onChange={(e) => {
+                    setFormState((prev) => ({ ...prev, assignedTeam: e.target.value }));
                     setErrorMessage('');
                   }}
-                  placeholder="IT Field Support / Biomedical / Facilities"
+                  placeholder="e.g. IT Field Support / Biomedical / Facilities"
                 />
               </div>
               <div>
-                <label className="form-label">Technician User ID</label>
-                <input
-                  type="number"
-                  min="1"
-                  className={`form-control ${errorMessage ? 'is-invalid' : ''}`}
-                  value={formState.assignedToId}
-                  onChange={(event) => {
-                    setFormState((prev) => ({ ...prev, assignedToId: event.target.value }));
-                    setErrorMessage('');
-                  }}
-                  placeholder="Enter technician user ID"
-                />
+                <label className="form-label">Assign to Technician</label>
+                {usersLoading ? (
+                  <div className="form-control-plaintext small text-secondary">Loading technicians...</div>
+                ) : assignableUsers.length > 0 ? (
+                  <select
+                    className={`form-select ${errorMessage ? 'is-invalid' : ''}`}
+                    value={formState.assignedToId !== '' && formState.assignedToId != null ? String(formState.assignedToId) : ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormState((prev) => ({ ...prev, assignedToId: val === '' ? '' : Number(val) }));
+                      setErrorMessage('');
+                    }}
+                  >
+                    <option value="">— Select technician (optional) —</option>
+                    {assignableUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.fullName} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    min="1"
+                    className={`form-control ${errorMessage ? 'is-invalid' : ''}`}
+                    value={formState.assignedToId ?? ''}
+                    onChange={(e) => {
+                      setFormState((prev) => ({ ...prev, assignedToId: e.target.value }));
+                      setErrorMessage('');
+                    }}
+                    placeholder="Enter technician user ID"
+                  />
+                )}
                 {errorMessage ? <div className="invalid-feedback">{errorMessage}</div> : null}
-                <div className="form-text">
-                  Backend does not yet expose a technician directory endpoint, so assignment uses the user ID.
-                </div>
+                {assignableUsers.length === 0 && !usersLoading ? (
+                  <div className="form-text">Select a technician from the list or enter user ID if you have it.</div>
+                ) : null}
               </div>
             </div>
             <div className="modal-footer">

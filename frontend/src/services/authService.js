@@ -1,4 +1,4 @@
-﻿import apiClient from './apiClient';
+import apiClient from './apiClient';
 
 export const loginRequest = async (payload) => {
   const response = await apiClient.post('/auth/login', payload);
@@ -12,6 +12,11 @@ export const getCurrentUserRequest = async () => {
 
 export const registerUserRequest = async (payload) => {
   const response = await apiClient.post('/auth/register', payload);
+  return response.data;
+};
+
+export const getAssignableUsersRequest = async () => {
+  const response = await apiClient.get('/users/assignable');
   return response.data;
 };
 

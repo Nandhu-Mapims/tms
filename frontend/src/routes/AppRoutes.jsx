@@ -26,13 +26,8 @@ function AppRoutes() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/tickets" element={<TicketListPage />} />
-          <Route path="/tickets/:id" element={<TicketDetailsPage />} />
-        </Route>
-      </Route>
-
-      <Route element={<ProtectedRoute allowedRoles={['REQUESTER']} />}>
-        <Route element={<MainLayout />}>
           <Route path="/tickets/create" element={<TicketCreatePage />} />
+          <Route path="/tickets/:id" element={<TicketDetailsPage />} />
         </Route>
       </Route>
 

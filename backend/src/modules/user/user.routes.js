@@ -1,9 +1,11 @@
-﻿const express = require('express');
-const { Role } = require('@prisma/client');
+const express = require('express');
+const { Role } = require('../../../generated/prisma');
 const userController = require('./user.controller');
 const { protect, authorizeRoles } = require('../../middlewares/auth.middleware');
 
 const router = express.Router();
+
+router.get('/assignable', protect, authorizeRoles(Role.ADMIN, Role.HELPDESK, Role.HOD), userController.getAssignableUsers);
 
 router.use(protect, authorizeRoles(Role.ADMIN));
 

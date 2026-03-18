@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import EntityManagementPage from '../../components/admin/EntityManagementPage.jsx';
 import { useToast } from '../../hooks/useToast';
 import { getDepartments } from '../../services/masterDataService';
@@ -51,7 +51,8 @@ function UserManagementPage() {
     await registerUserRequest({
       ...payload,
       fullName: payload.fullName.trim(),
-      email: payload.email.trim(),
+      empId: payload.empId.trim(),
+      email: payload.email ? payload.email.trim() : '',
       phone: payload.phone ? payload.phone.trim() : '',
       departmentId: payload.departmentId ? Number(payload.departmentId) : null,
     });
@@ -61,7 +62,8 @@ function UserManagementPage() {
   const submitUpdate = async (item, payload) => {
     const updatePayload = {
       fullName: payload.fullName.trim(),
-      email: payload.email.trim(),
+      empId: payload.empId.trim(),
+      email: payload.email ? payload.email.trim() : '',
       phone: payload.phone ? payload.phone.trim() : '',
       role: payload.role,
       departmentId: payload.departmentId ? Number(payload.departmentId) : null,
@@ -98,7 +100,8 @@ function UserManagementPage() {
       ]}
       fields={[
         { name: 'fullName', label: 'Full Name', required: true, colClass: 'col-md-6' },
-        { name: 'email', label: 'Email', type: 'email', required: true, colClass: 'col-md-6' },
+        { name: 'empId', label: 'Employee ID', required: true, colClass: 'col-md-3' },
+        { name: 'email', label: 'Email', type: 'email', colClass: 'col-md-3' },
         { name: 'phone', label: 'Phone', colClass: 'col-md-6' },
         {
           name: 'role',

@@ -1,10 +1,10 @@
-﻿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { APP_NAME } from '../../config/appConfig';
 import { getErrorMessage } from '../../utils/getErrorMessage';
-import { validateEmail, validateMinLength } from '../../utils/validators';
+import { validateMinLength, validateRequired } from '../../utils/validators';
 
 function LoginPage() {
   const toast = useToast();
@@ -13,7 +13,7 @@ function LoginPage() {
   const redirectPath = useMemo(() => location.state?.from?.pathname || '/dashboard', [location.state]);
 
   const [formState, setFormState] = useState({
-    email: '',
+    empId: '',
     password: '',
   });
   const [errors, setErrors] = useState({});
@@ -31,7 +31,7 @@ function LoginPage() {
 
   const validateForm = () => {
     const nextErrors = {
-      email: validateEmail(formState.email),
+      empId: validateRequired(formState.empId, 'Employee ID'),
       password: validateMinLength(formState.password, 8, 'Password'),
     };
 
@@ -56,7 +56,7 @@ function LoginPage() {
 
     try {
       await login({
-        email: formState.email.trim(),
+        empId: formState.empId.trim(),
         password: formState.password,
       });
       toast.success('Signed in successfully.');
@@ -92,22 +92,22 @@ function LoginPage() {
               <div className="col-lg-6 bg-white p-4 p-md-5">
                 <div className="mb-4">
                   <h2 className="h3 fw-bold text-dark mb-2">Sign In</h2>
-                  <p className="text-secondary mb-0">Use your hospital account to access the service management console.</p>
+                  <p className="text-secondary mb-0">Use your employee ID to access the service management console.</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="d-grid gap-3" noValidate>
                   <div>
-                    <label htmlFor="email" className="form-label fw-semibold">Email Address</label>
+                    <label htmlFor="empId" className="form-label fw-semibold">Employee ID</label>
                     <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      className={`form-control form-control-lg ${errors.email ? 'is-invalid' : ''}`}
-                      placeholder="admin@tmshospital.com"
-                      value={formState.email}
+                      id="empId"
+                      name="empId"
+                      type="text"
+                      className={`form-control form-control-lg ${errors.empId ? 'is-invalid' : ''}`}
+                      placeholder="e.g. 432156"
+                      value={formState.empId}
                       onChange={handleChange}
                     />
-                    {errors.email ? <div className="invalid-feedback">{errors.email}</div> : null}
+                    {errors.empId ? <div className="invalid-feedback">{errors.empId}</div> : null}
                   </div>
 
                   <div>

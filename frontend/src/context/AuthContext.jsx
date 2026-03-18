@@ -48,6 +48,21 @@ export function AuthProvider({ children }) {
     hydrateAuth();
   }, []);
 
+  useEffect(() => {
+    const handleLogout = () => {
+      clearStoredAuth();
+      setAuthState({
+        token: null,
+        user: null,
+        isAuthenticated: false,
+        isInitializing: false,
+      });
+    };
+
+    window.addEventListener('auth:logout', handleLogout);
+    return () => window.removeEventListener('auth:logout', handleLogout);
+  }, []);
+
   const login = async (credentials) => {
     const response = await loginRequest(credentials);
     const nextAuth = {

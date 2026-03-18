@@ -1,4 +1,4 @@
-const { TicketStatus } = require('@prisma/client');
+const { TicketStatus } = require('../../../generated/prisma');
 const { prisma } = require('../../config/database');
 const parsePagination = require('../../utils/parsePagination');
 
