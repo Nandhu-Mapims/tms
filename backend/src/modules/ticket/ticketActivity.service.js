@@ -1,6 +1,7 @@
 const { StatusCodes } = require('http-status-codes');
 const ApiError = require('../../utils/ApiError');
 const { INTERNAL_COMMENT_ROLES } = require('./ticket.constants');
+const TicketActivityLog = require('../../models/TicketActivityLog.model');
 
 const serializeValue = (value) => {
   if (value === undefined || value === null) {
@@ -10,18 +11,15 @@ const serializeValue = (value) => {
   return typeof value === 'string' ? value : JSON.stringify(value);
 };
 
-const createActivityLog = async (tx, { ticketId, userId, action, oldValue = null, newValue = null, remarks = null }) => {
-  return tx.ticketActivityLog.create({
-    data: {
-      ticketId,
-      userId,
-      action,
-      oldValue: serializeValue(oldValue),
-      newValue: serializeValue(newValue),
-      remarks,
-    },
+const createActivityLog = async (_tx, { ticketId, userId, action, oldValue = null, newValue = null, remarks = null }) =>
+  TicketActivityLog.create({
+    ticketId,
+    actorId: userId,
+    action,
+    fromValue: serializeValue(oldValue),
+    toValue: serializeValue(newValue),
+    note: remarks,
   });
-};
 
 const canViewInternalComments = (user) => INTERNAL_COMMENT_ROLES.includes(user.role);
 

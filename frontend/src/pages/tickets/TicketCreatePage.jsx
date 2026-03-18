@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader.jsx';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
@@ -135,10 +135,10 @@ function TicketCreatePage() {
         assetName: formState.assetName.trim(),
         assetId: formState.assetId.trim(),
         requesterContact: formState.requesterContact.trim(),
-        categoryId: Number(formState.categoryId),
-        subcategoryId: Number(formState.subcategoryId),
-        departmentId: Number(formState.departmentId),
-        locationId: Number(formState.locationId),
+        categoryId: formState.categoryId,
+        subcategoryId: formState.subcategoryId,
+        departmentId: formState.departmentId,
+        locationId: formState.locationId,
       };
 
       const response = await createTicketRequest(payload);

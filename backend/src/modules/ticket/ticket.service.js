@@ -1,20 +1,32 @@
-const { Prisma, Priority, Role, TicketStatus } = require('../../../generated/prisma');
+// Ticket service backed by MongoDB (Mongoose).
+const mongoose = require('mongoose');
 const { StatusCodes } = require('http-status-codes');
-const { prisma } = require('../../config/database');
+
 const ApiError = require('../../utils/ApiError');
 const parsePagination = require('../../utils/parsePagination');
-const parsePositiveInt = require('../../utils/parsePositiveInt');
-const { TICKET_INCLUDE, buildDateRangeFilter, buildTicketSearchFilter, generateTicketNumber } = require('./ticket.utils');
+const { Role, Priority, TicketStatus } = require('../../models/enums');
 const { STAFF_VIEW_ROLES, STAFF_ACTION_ROLES, ESCALATION_ROLES } = require('./ticket.constants');
 const { createActivityLog } = require('./ticketActivity.service');
 const { ensureCanViewTicket } = require('./ticket.shared');
-const { calculateSlaDeadlines, getSlaState, getPendingEscalations: getPendingEscalationsFromSla, markOverdueTickets } = require('./ticketSla.service');
 
-const REOPEN_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD];
+const Department = require('../../models/Department.model');
+const Category = require('../../models/Category.model');
+const Subcategory = require('../../models/Subcategory.model');
+const Location = require('../../models/Location.model');
+const User = require('../../models/User.model');
+const Ticket = require('../../models/Ticket.model');
+
 const ASSIGNABLE_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD, Role.TECHNICIAN];
-const PROGRESS_STATUSES = [TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.ON_HOLD, TicketStatus.ESCALATED];
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
+
+const toObjectId = (value, fieldName) => {
+  const normalized = String(value ?? '');
+  if (!normalized || !mongoose.Types.ObjectId.isValid(normalized)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, `${fieldName} must be a valid id`);
+  }
+  return new mongoose.Types.ObjectId(normalized);
+};
 
 const validatePriority = (priority) => {
   if (!Object.values(Priority).includes(priority)) {
@@ -28,607 +40,348 @@ const validateStatus = (status) => {
   }
 };
 
-const validateNonEmptyString = (value, fieldName) => {
-  const normalized = normalizeText(value);
-
-  if (!normalized) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, `${fieldName} is required`);
-  }
-
-  return normalized;
-};
-
-const ensureCanCreateTicket = () => {
-  /* Any authenticated user may create a ticket. */
-};
-
-const ensureNotClosedForEdit = (ticket) => {
-  if (ticket.status === TicketStatus.CLOSED) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Closed tickets cannot be edited. Use reopen if changes are needed');
-  }
-};
-
 const ensureStaffAccess = (user) => {
   if (!STAFF_ACTION_ROLES.includes(user.role)) {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Only hospital operations roles can perform this action');
   }
 };
 
-const ensureAssignedUserCanUpdate = (user, ticket) => {
-  if (STAFF_VIEW_ROLES.includes(user.role)) {
-    return;
-  }
-
-  if (ticket.assignedToId === user.id) {
-    return;
-  }
-
-  throw new ApiError(StatusCodes.FORBIDDEN, 'Only the assigned user or hospital operations roles can update progress');
+const ensureAssigneeOrStaff = (user, ticket) => {
+  if (STAFF_VIEW_ROLES.includes(user.role)) return;
+  const userId = String(user?.id ?? '');
+  const assignedToId = ticket?.assignedToId?.toString?.() ?? '';
+  if (assignedToId && assignedToId === userId) return;
+  throw new ApiError(StatusCodes.FORBIDDEN, 'Only the assigned user or hospital operations roles can perform this action');
 };
 
-const validateMasterLinks = async (tx, payload) => {
-  const departmentId = parsePositiveInt(payload.departmentId, 'departmentId');
-  const categoryId = parsePositiveInt(payload.categoryId, 'categoryId');
-  const subcategoryId = parsePositiveInt(payload.subcategoryId, 'subcategoryId');
-  const locationId = parsePositiveInt(payload.locationId, 'locationId');
+const computeDueAt = (ticket) => ticket?.resolutionDueAt ?? ticket?.firstResponseDueAt ?? null;
 
+const buildTicketNumber = ({ categoryCode, year, runningNumber }) =>
+  `TKT-${categoryCode}-${year}-${String(runningNumber).padStart(4, '0')}`;
+
+const generateTicketNumber = async (categoryCode) => {
+  const year = new Date().getUTCFullYear();
+  const start = new Date(`${year}-01-01T00:00:00.000Z`);
+  const end = new Date(`${year + 1}-01-01T00:00:00.000Z`);
+
+  const count = await Ticket.countDocuments({ createdAt: { $gte: start, $lt: end } });
+  return buildTicketNumber({ categoryCode, year, runningNumber: count + 1 });
+};
+
+const validateMasterLinks = async ({ departmentId, categoryId, subcategoryId, locationId }) => {
   const [department, category, subcategory, location] = await Promise.all([
-    tx.department.findFirst({ where: { id: departmentId, isActive: true } }),
-    tx.category.findFirst({ where: { id: categoryId, isActive: true } }),
-    tx.subcategory.findFirst({ where: { id: subcategoryId, isActive: true } }),
-    tx.location.findFirst({ where: { id: locationId, isActive: true } }),
+    Department.findOne({ _id: departmentId, isActive: true }).lean(),
+    Category.findOne({ _id: categoryId, isActive: true }).lean(),
+    Subcategory.findOne({ _id: subcategoryId, isActive: true }).lean(),
+    Location.findOne({ _id: locationId, isActive: true }).lean(),
   ]);
 
-  if (!department) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected department is invalid or inactive');
-  }
+  if (!department) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid department selected');
+  if (!category) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid category selected');
+  if (!subcategory) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid subcategory selected');
+  if (!location) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid location selected');
 
-  if (!category) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected category is invalid or inactive');
-  }
+  return { department, category, subcategory, location };
+};
 
-  if (!subcategory) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected subcategory is invalid or inactive');
-  }
+const populateTicket = (query) =>
+  query
+    .populate({ path: 'departmentId', select: 'name code' })
+    .populate({ path: 'categoryId', select: 'name code' })
+    .populate({ path: 'subcategoryId', select: 'name code categoryId' })
+    .populate({ path: 'locationId', select: 'block floor ward room unit' })
+    .populate({ path: 'requesterId', select: 'fullName email phone role' })
+    .populate({ path: 'assignedToId', select: 'fullName email phone role' });
 
-  if (subcategory.categoryId !== category.id) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected subcategory does not belong to the selected category');
-  }
-
-  if (!location) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected location is invalid or inactive');
-  }
-
+const shapeTicket = (ticket) => {
+  const t = ticket?.toObject ? ticket.toObject() : ticket;
   return {
-    department,
-    category,
-    subcategory,
-    location,
+    ...t,
+    id: t?._id?.toString?.() ?? t?.id,
+    department: t?.departmentId ?? null,
+    category: t?.categoryId ?? null,
+    subcategory: t?.subcategoryId ?? null,
+    location: t?.locationId ?? null,
+    requester: t?.requesterId ?? null,
+    assignedTo: t?.assignedToId ?? null,
+    departmentId: t?.departmentId?._id?.toString?.() ?? t?.departmentId,
+    categoryId: t?.categoryId?._id?.toString?.() ?? t?.categoryId,
+    subcategoryId: t?.subcategoryId?._id?.toString?.() ?? t?.subcategoryId,
+    locationId: t?.locationId?._id?.toString?.() ?? t?.locationId,
+    requesterId: t?.requesterId?._id?.toString?.() ?? t?.requesterId,
+    assignedToId: t?.assignedToId?._id?.toString?.() ?? t?.assignedToId ?? null,
+    dueAt: computeDueAt(t),
+  };
+};
+
+const buildScopedWhere = (user) => {
+  const where = {};
+  if (user.role === Role.REQUESTER) where.requesterId = toObjectId(user.id, 'userId');
+  if (user.role === Role.TECHNICIAN) where.assignedToId = toObjectId(user.id, 'userId');
+  return where;
+};
+
+const createTicket = async (payload, user) => {
+  if (user?.role !== Role.REQUESTER) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Only requesters can raise a ticket');
+  }
+
+  const title = normalizeText(payload?.title);
+  const description = normalizeText(payload?.description) || null;
+  const priority = payload?.priority;
+
+  if (!title) throw new ApiError(StatusCodes.BAD_REQUEST, 'title is required');
+  validatePriority(priority);
+
+  const departmentId = toObjectId(payload?.departmentId, 'departmentId');
+  const categoryId = toObjectId(payload?.categoryId, 'categoryId');
+  const subcategoryId = toObjectId(payload?.subcategoryId, 'subcategoryId');
+  const locationId = toObjectId(payload?.locationId, 'locationId');
+
+  const { category } = await validateMasterLinks({ departmentId, categoryId, subcategoryId, locationId });
+
+  const ticketNumber = await generateTicketNumber(category.code ?? 'GEN');
+
+  const ticket = await Ticket.create({
+    ticketNumber,
+    title,
+    description,
+    priority,
+    status: TicketStatus.OPEN,
     departmentId,
     categoryId,
     subcategoryId,
     locationId,
-  };
-};
+    requesterId: toObjectId(user.id, 'userId'),
+    assignedToId: null,
+  });
 
-const createTicketTx = async (payload, requester) => {
-  return prisma.$transaction(
-    async (tx) => {
-      const title = validateNonEmptyString(payload.title, 'title');
-      const description = validateNonEmptyString(payload.description, 'description');
-      const requesterContact = validateNonEmptyString(payload.requesterContact, 'requesterContact');
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'CREATED',
+    newValue: ticket.status,
+    remarks: 'Ticket created',
+  });
 
-      validatePriority(payload.priority);
-
-      const links = await validateMasterLinks(tx, payload);
-      const slaDeadlines = await calculateSlaDeadlines({ priority: payload.priority }, tx);
-      const ticketNumber = await generateTicketNumber(tx, links.category.code);
-
-      const ticket = await tx.ticket.create({
-        data: {
-          ticketNumber,
-          title,
-          description,
-          departmentId: links.departmentId,
-          categoryId: links.categoryId,
-          subcategoryId: links.subcategoryId,
-          locationId: links.locationId,
-          assetName: normalizeText(payload.assetName) || null,
-          assetId: normalizeText(payload.assetId) || null,
-          priority: payload.priority,
-          status: TicketStatus.NEW,
-          requesterId: requester.id,
-          requesterContact,
-          dueAt: slaDeadlines.resolutionDueAt,
-          isOverdue: false,
-        },
-        include: TICKET_INCLUDE,
-      });
-
-      await createActivityLog(tx, {
-        ticketId: ticket.id,
-        userId: requester.id,
-        action: 'TICKET_CREATED',
-        newValue: {
-          ticketNumber: ticket.ticketNumber,
-          priority: ticket.priority,
-          status: ticket.status,
-          dueAt: ticket.dueAt,
-        },
-        remarks: 'Hospital ticket created',
-      });
-
-      return ticket;
-    },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }
-  );
-};
-
-const createTicket = async (payload, requester) => {
-  ensureCanCreateTicket();
-
-  const maxAttempts = 3;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await createTicketTx(payload, requester);
-    } catch (error) {
-      if (error.code === 'P2002' && attempt < maxAttempts) {
-        continue;
-      }
-
-      throw error;
-    }
-  }
-
-  throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, 'Unable to generate a unique ticket number');
-};
-
-const buildListWhere = (query, user) => {
-  const createdAt = buildDateRangeFilter(query.startDate, query.endDate);
-  const filters = {
-    ...(query.status && { status: query.status }),
-    ...(query.priority && { priority: query.priority }),
-    ...(query.categoryId && { categoryId: parsePositiveInt(query.categoryId, 'categoryId') }),
-    ...(query.departmentId && { departmentId: parsePositiveInt(query.departmentId, 'departmentId') }),
-    ...(query.assignedToId && { assignedToId: parsePositiveInt(query.assignedToId, 'assignedToId') }),
-    ...(query.requesterId && { requesterId: parsePositiveInt(query.requesterId, 'requesterId') }),
-    ...(createdAt && { createdAt }),
-    ...buildTicketSearchFilter(query.search),
-  };
-
-  if (STAFF_VIEW_ROLES.includes(user.role)) {
-    return filters;
-  }
-
-  if (user.role === Role.REQUESTER) {
-    return {
-      ...filters,
-      requesterId: user.id,
-    };
-  }
-
-  return {
-    ...filters,
-    assignedToId: user.id,
-  };
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
 };
 
 const getTickets = async (query, user) => {
-  if (query.status) validateStatus(query.status);
-  if (query.priority) validatePriority(query.priority);
+  const { page, limit, skip } = parsePagination(query);
+  const where = buildScopedWhere(user);
 
-  await markOverdueTickets();
+  if (query?.categoryId) {
+    where.categoryId = toObjectId(query.categoryId, 'categoryId');
+  }
 
-  const pagination = parsePagination(query);
-  const where = buildListWhere(query, user);
+  if (query?.departmentId) {
+    where.departmentId = toObjectId(query.departmentId, 'departmentId');
+  }
+
+  if (query?.assignedToId) {
+    where.assignedToId = toObjectId(query.assignedToId, 'assignedToId');
+  }
+
+  if (query?.startDate || query?.endDate) {
+    const createdAt = {};
+    if (query.startDate) {
+      const start = new Date(query.startDate);
+      if (Number.isNaN(start.getTime())) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid startDate supplied');
+      createdAt.$gte = start;
+    }
+    if (query.endDate) {
+      const end = new Date(query.endDate);
+      if (Number.isNaN(end.getTime())) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid endDate supplied');
+      end.setHours(23, 59, 59, 999);
+      createdAt.$lte = end;
+    }
+    if (Object.keys(createdAt).length) where.createdAt = createdAt;
+  }
+
+  if (query?.status) {
+    validateStatus(query.status);
+    where.status = query.status;
+  }
+  if (query?.priority) {
+    validatePriority(query.priority);
+    where.priority = query.priority;
+  }
+  if (query?.search && String(query.search).trim()) {
+    const term = String(query.search).trim();
+    where.$or = [{ ticketNumber: { $regex: term, $options: 'i' } }, { title: { $regex: term, $options: 'i' } }];
+  }
 
   const [items, total] = await Promise.all([
-    prisma.ticket.findMany({
-      where,
-      include: TICKET_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-      skip: pagination.skip,
-      take: pagination.limit,
-    }),
-    prisma.ticket.count({ where }),
+    populateTicket(Ticket.find(where).sort({ createdAt: -1 }).skip(skip).limit(limit)).lean(),
+    Ticket.countDocuments(where),
   ]);
 
   return {
-    items,
-    meta: {
-      page: pagination.page,
-      limit: pagination.limit,
-      total,
-      totalPages: Math.ceil(total / pagination.limit) || 1,
-    },
+    items: items.map(shapeTicket),
+    meta: { page, limit, total, count: items.length },
   };
 };
 
 const getTicketById = async (id, user) => {
-  await markOverdueTickets();
-
-  const ticketId = parsePositiveInt(id, 'id');
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
-    include: TICKET_INCLUDE,
-  });
-
-  if (!ticket) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-  }
-
+  const ticket = await populateTicket(Ticket.findById(id)).lean();
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
   ensureCanViewTicket(user, ticket);
-  return ticket;
+  return shapeTicket(ticket);
 };
 
 const updateTicket = async (id, payload, user) => {
-  const ticketId = parsePositiveInt(id, 'id');
-  const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
+  const ticket = await Ticket.findById(id);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  ensureCanViewTicket(user, ticket);
+  ensureAssigneeOrStaff(user, ticket);
 
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-  }
-
-  ensureStaffAccess(user);
-  ensureNotClosedForEdit(existing);
-
-  const data = {};
-
-  if (payload.title !== undefined) data.title = validateNonEmptyString(payload.title, 'title');
-  if (payload.description !== undefined) data.description = validateNonEmptyString(payload.description, 'description');
-  if (payload.requesterContact !== undefined) {
-    data.requesterContact = validateNonEmptyString(payload.requesterContact, 'requesterContact');
-  }
-  if (payload.assetName !== undefined) data.assetName = normalizeText(payload.assetName) || null;
-  if (payload.assetId !== undefined) data.assetId = normalizeText(payload.assetId) || null;
-  if (payload.priority !== undefined) {
+  const updates = {};
+  if (payload?.title !== undefined) updates.title = normalizeText(payload.title);
+  if (payload?.description !== undefined) updates.description = normalizeText(payload.description) || null;
+  if (payload?.priority !== undefined) {
     validatePriority(payload.priority);
-    data.priority = payload.priority;
-    const slaDeadlines = await calculateSlaDeadlines({ priority: payload.priority, createdAt: existing.createdAt });
-    data.dueAt = slaDeadlines.resolutionDueAt;
-  }
-  if (payload.departmentId !== undefined) data.departmentId = parsePositiveInt(payload.departmentId, 'departmentId');
-  if (payload.categoryId !== undefined) data.categoryId = parsePositiveInt(payload.categoryId, 'categoryId');
-  if (payload.subcategoryId !== undefined) data.subcategoryId = parsePositiveInt(payload.subcategoryId, 'subcategoryId');
-  if (payload.locationId !== undefined) data.locationId = parsePositiveInt(payload.locationId, 'locationId');
-
-  if (data.categoryId || data.subcategoryId || data.departmentId || data.locationId) {
-    const validatePayload = {
-      departmentId: data.departmentId || existing.departmentId,
-      categoryId: data.categoryId || existing.categoryId,
-      subcategoryId: data.subcategoryId || existing.subcategoryId,
-      locationId: data.locationId || existing.locationId,
-    };
-    await validateMasterLinks(prisma, validatePayload);
+    updates.priority = payload.priority;
   }
 
-  return prisma.ticket.update({
-    where: { id: ticketId },
-    data,
-    include: TICKET_INCLUDE,
-  });
+  const updated = await Ticket.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  await createActivityLog(null, { ticketId: updated._id, userId: user.id, action: 'UPDATED', remarks: 'Ticket updated' });
+  const full = await populateTicket(Ticket.findById(updated._id)).lean();
+  return shapeTicket(full);
 };
 
 const assignTicket = async (id, payload, user) => {
-  const ticketId = parsePositiveInt(id, 'id');
   ensureStaffAccess(user);
+  const assignedToId = toObjectId(payload?.assignedToId, 'assignedToId');
 
-  const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const assignee = await User.findById(assignedToId).lean();
+  if (!assignee || !ASSIGNABLE_ROLES.includes(assignee.role)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'assignedToId is invalid');
   }
 
-  ensureNotClosedForEdit(existing);
+  const ticket = await Ticket.findById(id);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
 
-  const data = {};
-  const previousAssignee = existing.assignedToId;
+  ticket.assignedToId = assignedToId;
+  ticket.status = TicketStatus.ASSIGNED;
+  await ticket.save();
 
-  if (payload.assignedToId !== undefined) {
-    if (payload.assignedToId === null) {
-      data.assignedToId = null;
-    } else {
-      const assignedToId = parsePositiveInt(payload.assignedToId, 'assignedToId');
-      const assignedUser = await prisma.user.findFirst({
-        where: {
-          id: assignedToId,
-          isActive: true,
-        },
-      });
-
-      if (!assignedUser) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, 'Assigned user is invalid or inactive');
-      }
-
-      if (!ASSIGNABLE_ROLES.includes(assignedUser.role)) {
-        throw new ApiError(StatusCodes.BAD_REQUEST, 'Tickets can only be assigned to hospital operational roles');
-      }
-
-      data.assignedToId = assignedToId;
-    }
-  }
-
-  if (payload.assignedTeam !== undefined) {
-    data.assignedTeam = normalizeText(payload.assignedTeam) || null;
-  }
-
-  if (payload.assignedToId !== undefined) {
-    data.status = data.assignedToId ? TicketStatus.ASSIGNED : TicketStatus.OPEN;
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
-      where: { id: ticketId },
-      data,
-      include: TICKET_INCLUDE,
-    });
-
-    let action = 'TICKET_ASSIGNED';
-    if (previousAssignee && data.assignedToId && previousAssignee !== data.assignedToId) {
-      action = 'TICKET_REASSIGNED';
-    }
-
-    await createActivityLog(tx, {
-      ticketId,
-      userId: user.id,
-      action,
-      oldValue: {
-        assignedToId: existing.assignedToId,
-        assignedTeam: existing.assignedTeam,
-        status: existing.status,
-      },
-      newValue: {
-        assignedToId: ticket.assignedToId,
-        assignedTeam: ticket.assignedTeam,
-        status: ticket.status,
-      },
-      remarks: action === 'TICKET_REASSIGNED' ? 'Ticket reassigned' : 'Ticket assignment updated',
-    });
-
-    return ticket;
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'ASSIGNED',
+    newValue: assignee.fullName,
+    remarks: 'Ticket assigned',
   });
+
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
 };
 
 const updateStatus = async (id, payload, user) => {
-  const ticketId = parsePositiveInt(id, 'id');
-  const status = payload.status;
-
+  const status = payload?.status;
   validateStatus(status);
 
-  const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-  }
+  const ticket = await Ticket.findById(id);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  ensureCanViewTicket(user, ticket);
+  ensureAssigneeOrStaff(user, ticket);
 
-  ensureNotClosedForEdit(existing);
-  ensureAssignedUserCanUpdate(user, existing);
+  const oldStatus = ticket.status;
+  ticket.status = status;
+  await ticket.save();
 
-  if (!PROGRESS_STATUSES.includes(status) && !STAFF_VIEW_ROLES.includes(user.role)) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Assigned users can only update ticket progress states');
-  }
-
-  const firstResponseStatuses = [TicketStatus.OPEN, TicketStatus.IN_PROGRESS, TicketStatus.ON_HOLD, TicketStatus.ESCALATED, TicketStatus.RESOLVED];
-  const shouldSetFirstRespondedAt = !existing.firstRespondedAt && firstResponseStatuses.includes(status);
-
-  return prisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status,
-        ...(shouldSetFirstRespondedAt && { firstRespondedAt: new Date() }),
-      },
-      include: TICKET_INCLUDE,
-    });
-
-    const slaState = await getSlaState(ticket, tx);
-    if (ticket.isOverdue !== slaState.isOverdue) {
-      await tx.ticket.update({
-        where: { id: ticketId },
-        data: { isOverdue: slaState.isOverdue },
-      });
-      ticket.isOverdue = slaState.isOverdue;
-    }
-
-    await createActivityLog(tx, {
-      ticketId,
-      userId: user.id,
-      action: 'STATUS_CHANGED',
-      oldValue: { status: existing.status, firstRespondedAt: existing.firstRespondedAt },
-      newValue: { status: ticket.status, firstRespondedAt: ticket.firstRespondedAt },
-      remarks: 'Ticket status changed',
-    });
-
-    return ticket;
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'STATUS_CHANGED',
+    oldValue: oldStatus,
+    newValue: status,
+    remarks: 'Ticket status updated',
   });
+
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
 };
 
 const resolveTicket = async (id, payload, user) => {
-  const ticketId = parsePositiveInt(id, 'id');
-  const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
+  const ticket = await Ticket.findById(id);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  ensureCanViewTicket(user, ticket);
+  ensureAssigneeOrStaff(user, ticket);
 
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-  }
+  const oldStatus = ticket.status;
+  ticket.status = TicketStatus.RESOLVED;
+  ticket.resolvedAt = new Date();
+  await ticket.save();
 
-  ensureNotClosedForEdit(existing);
-  ensureAssignedUserCanUpdate(user, existing);
-
-  const resolutionNote = normalizeText(payload.resolutionNote);
-
-  return prisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status: TicketStatus.RESOLVED,
-        resolvedAt: new Date(),
-        ...(existing.firstRespondedAt ? {} : { firstRespondedAt: new Date() }),
-        ...(resolutionNote && {
-          description: `${existing.description}\n\nResolution Note: ${resolutionNote}`,
-        }),
-      },
-      include: TICKET_INCLUDE,
-    });
-
-    await tx.ticket.update({
-      where: { id: ticketId },
-      data: { isOverdue: false },
-    });
-    ticket.isOverdue = false;
-
-    await createActivityLog(tx, {
-      ticketId,
-      userId: user.id,
-      action: 'TICKET_RESOLVED',
-      oldValue: { status: existing.status, resolvedAt: existing.resolvedAt },
-      newValue: { status: ticket.status, resolvedAt: ticket.resolvedAt },
-      remarks: resolutionNote || 'Ticket resolved',
-    });
-
-    return ticket;
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'RESOLVED',
+    oldValue: oldStatus,
+    newValue: ticket.status,
+    remarks: payload?.resolutionNote ? String(payload.resolutionNote) : 'Ticket resolved',
   });
+
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
 };
 
 const closeTicket = async (id, user) => {
-  const ticketId = parsePositiveInt(id, 'id');
   ensureStaffAccess(user);
-
-  const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
-
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-  }
-
-  if (existing.status !== TicketStatus.RESOLVED) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Only resolved tickets can be closed');
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status: TicketStatus.CLOSED,
-        closedAt: new Date(),
-        isOverdue: false,
-      },
-      include: TICKET_INCLUDE,
-    });
-
-    await createActivityLog(tx, {
-      ticketId,
-      userId: user.id,
-      action: 'TICKET_CLOSED',
-      oldValue: { status: existing.status, closedAt: existing.closedAt },
-      newValue: { status: ticket.status, closedAt: ticket.closedAt },
-      remarks: 'Ticket closed',
-    });
-
-    return ticket;
-  });
+  const ticket = await Ticket.findById(id);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const oldStatus = ticket.status;
+  ticket.status = TicketStatus.CLOSED;
+  ticket.closedAt = new Date();
+  await ticket.save();
+  await createActivityLog(null, { ticketId: ticket._id, userId: user.id, action: 'CLOSED', oldValue: oldStatus, newValue: ticket.status, remarks: 'Ticket closed' });
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
 };
 
 const reopenTicket = async (id, user) => {
-  const ticketId = parsePositiveInt(id, 'id');
-
-  if (!REOPEN_ROLES.includes(user.role)) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Only authorized hospital roles can reopen tickets');
-  }
-
-  const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
-
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-  }
-
-  if (existing.status !== TicketStatus.CLOSED) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Only closed tickets can be reopened');
-  }
-
-  const slaState = await getSlaState(existing);
-
-  return prisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status: TicketStatus.REOPENED,
-        closedAt: null,
-        resolvedAt: null,
-        isOverdue: slaState.isOverdue,
-      },
-      include: TICKET_INCLUDE,
-    });
-
-    await createActivityLog(tx, {
-      ticketId,
-      userId: user.id,
-      action: 'TICKET_REOPENED',
-      oldValue: { status: existing.status, closedAt: existing.closedAt, resolvedAt: existing.resolvedAt },
-      newValue: { status: ticket.status, closedAt: ticket.closedAt, resolvedAt: ticket.resolvedAt },
-      remarks: 'Ticket reopened',
-    });
-
-    return ticket;
-  });
-};
-
-const getPendingEscalations = async (query, user) => {
-  if (!ESCALATION_ROLES.includes(user.role)) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Only authorized hospital roles can view pending escalations');
-  }
-
-  await markOverdueTickets();
-  return getPendingEscalationsFromSla(query);
+  ensureStaffAccess(user);
+  const ticket = await Ticket.findById(id);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const oldStatus = ticket.status;
+  ticket.status = TicketStatus.REOPENED;
+  ticket.resolvedAt = null;
+  ticket.closedAt = null;
+  await ticket.save();
+  await createActivityLog(null, { ticketId: ticket._id, userId: user.id, action: 'REOPENED', oldValue: oldStatus, newValue: ticket.status, remarks: 'Ticket reopened' });
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
 };
 
 const escalateTicket = async (id, payload, user) => {
-  const ticketId = parsePositiveInt(id, 'id');
-
   if (!ESCALATION_ROLES.includes(user.role)) {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Only authorized hospital roles can escalate tickets');
   }
 
-  const existing = await prisma.ticket.findUnique({ where: { id: ticketId } });
+  const ticket = await Ticket.findById(id);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const oldStatus = ticket.status;
+  ticket.status = TicketStatus.ESCALATED;
+  ticket.escalatedAt = new Date();
+  ticket.isOverdue = true;
+  await ticket.save();
+  await createActivityLog(null, { ticketId: ticket._id, userId: user.id, action: 'ESCALATED', oldValue: oldStatus, newValue: ticket.status, remarks: payload?.remarks ? String(payload.remarks) : 'Ticket escalated' });
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
+};
 
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-  }
-
-  if ([TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED].includes(existing.status)) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Resolved, closed, or cancelled tickets cannot be escalated');
-  }
-
-  const slaState = await getSlaState(existing);
-
-  if (!slaState.isOverdue) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Only overdue tickets can be marked escalated');
-  }
-
-  const remarks = normalizeText(payload.remarks) || 'Ticket escalated after SLA breach';
-
-  return prisma.$transaction(async (tx) => {
-    const ticket = await tx.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status: TicketStatus.ESCALATED,
-        escalatedAt: existing.escalatedAt || new Date(),
-        isOverdue: true,
-        ...(existing.firstRespondedAt ? {} : { firstRespondedAt: new Date() }),
-      },
-      include: TICKET_INCLUDE,
-    });
-
-    await createActivityLog(tx, {
-      ticketId,
-      userId: user.id,
-      action: 'TICKET_ESCALATED',
-      oldValue: { status: existing.status, escalatedAt: existing.escalatedAt },
-      newValue: { status: ticket.status, escalatedAt: ticket.escalatedAt },
-      remarks,
-    });
-
-    return ticket;
-  });
+const getPendingEscalations = async (query, user) => {
+  ensureStaffAccess(user);
+  const { page, limit, skip } = parsePagination(query);
+  const where = { status: TicketStatus.ESCALATED };
+  const [items, total] = await Promise.all([
+    populateTicket(Ticket.find(where).sort({ createdAt: -1 }).skip(skip).limit(limit)).lean(),
+    Ticket.countDocuments(where),
+  ]);
+  return { items: items.map(shapeTicket), meta: { page, limit, total, count: items.length } };
 };
 
 module.exports = {

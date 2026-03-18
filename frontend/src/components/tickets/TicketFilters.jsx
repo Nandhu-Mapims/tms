@@ -75,13 +75,12 @@ function TicketFilters({
           <div className="col-6 col-xl-2">
             <label className="form-label">Technician ID</label>
             <input
-              type="number"
+              type="text"
               className="form-control"
               name="assignedToId"
               value={filters.assignedToId}
               onChange={handleChange}
-              placeholder="User ID"
-              min="1"
+              placeholder="Technician ObjectId"
             />
           </div>
           <div className="col-6 col-xl-2">

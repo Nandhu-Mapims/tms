@@ -1,4 +1,4 @@
-const { Role } = require('../../../generated/prisma');
+const { Role } = require('../../models/enums');
 
 const STAFF_VIEW_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD];
 const INTERNAL_COMMENT_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD, Role.TECHNICIAN];

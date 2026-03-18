@@ -31,7 +31,7 @@ export const NAV_ITEMS = [
     label: 'Create Ticket',
     icon: 'bi-plus-square',
     path: '/tickets/create',
-    roles: ['ADMIN', 'HELPDESK', 'TECHNICIAN', 'HOD', 'REQUESTER'],
+    roles: ['REQUESTER'],
   },
   {
     key: 'departments',
@@ -66,7 +66,7 @@ export const NAV_ITEMS = [
     label: 'SLA Settings',
     icon: 'bi-clock-history',
     path: '/admin/sla-settings',
-    roles: ['ADMIN', 'HELPDESK', 'HOD'],
+    roles: ['ADMIN'],
   },
   {
     key: 'users',

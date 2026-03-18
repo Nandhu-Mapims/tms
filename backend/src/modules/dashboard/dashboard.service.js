@@ -1,8 +1,9 @@
-const { Role, TicketStatus } = require('../../../generated/prisma');
+const mongoose = require('mongoose');
 const { StatusCodes } = require('http-status-codes');
-const { prisma } = require('../../config/database');
 const ApiError = require('../../utils/ApiError');
 const parsePositiveInt = require('../../utils/parsePositiveInt');
+const { Role, TicketStatus } = require('../../models/enums');
+const Ticket = require('../../models/Ticket.model');
 
 const DASHBOARD_FULL_ACCESS_ROLES = [Role.ADMIN, Role.HOD, Role.HELPDESK];
 
@@ -18,9 +19,6 @@ const endOfDay = (date = new Date()) => {
   return end;
 };
 
-const startOfMonth = (year, monthIndex) => new Date(year, monthIndex, 1, 0, 0, 0, 0);
-const endOfMonth = (year, monthIndex) => new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
-
 const ensureDashboardAccess = (user) => {
   if (
     DASHBOARD_FULL_ACCESS_ROLES.includes(user.role) ||
@@ -33,21 +31,36 @@ const ensureDashboardAccess = (user) => {
   throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to access dashboard or reports');
 };
 
+const toObjectId = (value, fieldName = 'id') => {
+  if (!value) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, `${fieldName} is required`);
+  }
+
+  if (value instanceof mongoose.Types.ObjectId) return value;
+
+  const normalized = String(value);
+  if (!mongoose.Types.ObjectId.isValid(normalized)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, `${fieldName} must be a valid id`);
+  }
+
+  return new mongoose.Types.ObjectId(normalized);
+};
+
 const buildScopedWhere = (user, filters = {}) => {
   ensureDashboardAccess(user);
 
   const where = { ...filters };
 
   if (user.role === Role.REQUESTER) {
-    where.requesterId = user.id;
+    where.requesterId = toObjectId(user.id, 'userId');
   } else if (user.role === Role.TECHNICIAN) {
-    where.assignedToId = user.id;
+    where.assignedToId = toObjectId(user.id, 'userId');
   }
 
   return where;
 };
 
-const buildDateRangeWhere = (query) => {
+const buildDateRangeWhere = (query = {}) => {
   const createdAt = {};
 
   if (query.startDate) {
@@ -55,7 +68,7 @@ const buildDateRangeWhere = (query) => {
     if (Number.isNaN(startDate.getTime())) {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid startDate supplied');
     }
-    createdAt.gte = startDate;
+    createdAt.$gte = startDate;
   }
 
   if (query.endDate) {
@@ -64,7 +77,7 @@ const buildDateRangeWhere = (query) => {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid endDate supplied');
     }
     endDate.setHours(23, 59, 59, 999);
-    createdAt.lte = endDate;
+    createdAt.$lte = endDate;
   }
 
   return Object.keys(createdAt).length ? createdAt : undefined;
@@ -75,12 +88,12 @@ const buildTicketReportWhere = (query, user) => {
   const createdAt = buildDateRangeWhere(query);
 
   if (createdAt) where.createdAt = createdAt;
-  if (query.departmentId) where.departmentId = parsePositiveInt(query.departmentId, 'departmentId');
-  if (query.categoryId) where.categoryId = parsePositiveInt(query.categoryId, 'categoryId');
-  if (query.assignedToId) where.assignedToId = parsePositiveInt(query.assignedToId, 'assignedToId');
-  if (query.requesterId) where.requesterId = parsePositiveInt(query.requesterId, 'requesterId');
-  if (query.priority) where.priority = query.priority;
-  if (query.status) where.status = query.status;
+  if (query?.departmentId) where.departmentId = toObjectId(query.departmentId, 'departmentId');
+  if (query?.categoryId) where.categoryId = toObjectId(query.categoryId, 'categoryId');
+  if (query?.assignedToId) where.assignedToId = toObjectId(query.assignedToId, 'assignedToId');
+  if (query?.requesterId) where.requesterId = toObjectId(query.requesterId, 'requesterId');
+  if (query?.priority) where.priority = query.priority;
+  if (query?.status) where.status = query.status;
 
   return where;
 };
@@ -106,24 +119,14 @@ const getSummary = async (user) => {
     closedToday,
     escalatedTickets,
   ] = await Promise.all([
-    prisma.ticket.count({ where: scopedWhere }),
-    prisma.ticket.count({ where: { ...scopedWhere, status: TicketStatus.OPEN } }),
-    prisma.ticket.count({ where: { ...scopedWhere, status: TicketStatus.ASSIGNED } }),
-    prisma.ticket.count({ where: { ...scopedWhere, status: TicketStatus.IN_PROGRESS } }),
-    prisma.ticket.count({ where: { ...scopedWhere, isOverdue: true } }),
-    prisma.ticket.count({
-      where: {
-        ...scopedWhere,
-        resolvedAt: { gte: todayStart, lte: todayEnd },
-      },
-    }),
-    prisma.ticket.count({
-      where: {
-        ...scopedWhere,
-        closedAt: { gte: todayStart, lte: todayEnd },
-      },
-    }),
-    prisma.ticket.count({ where: { ...scopedWhere, status: TicketStatus.ESCALATED } }),
+    Ticket.countDocuments(scopedWhere),
+    Ticket.countDocuments({ ...scopedWhere, status: TicketStatus.OPEN }),
+    Ticket.countDocuments({ ...scopedWhere, status: TicketStatus.ASSIGNED }),
+    Ticket.countDocuments({ ...scopedWhere, status: TicketStatus.IN_PROGRESS }),
+    Ticket.countDocuments({ ...scopedWhere, isOverdue: true }),
+    Ticket.countDocuments({ ...scopedWhere, resolvedAt: { $gte: todayStart, $lte: todayEnd } }),
+    Ticket.countDocuments({ ...scopedWhere, closedAt: { $gte: todayStart, $lte: todayEnd } }),
+    Ticket.countDocuments({ ...scopedWhere, status: TicketStatus.ESCALATED }),
   ]);
 
   return {
@@ -138,174 +141,118 @@ const getSummary = async (user) => {
   };
 };
 
-const getCategoryWise = async (user) => {
-  const rows = await prisma.ticket.groupBy({
-    by: ['categoryId'],
-    where: buildScopedWhere(user),
-    _count: { _all: true },
-    orderBy: { categoryId: 'asc' },
-  });
+const buildGroupChart = async ({ user, groupField, lookupFrom, labelPath }) => {
+  const scopedWhere = buildScopedWhere(user);
 
-  const categoryIds = rows.map((row) => row.categoryId);
-  const categories = categoryIds.length
-    ? await prisma.category.findMany({
-        where: { id: { in: categoryIds } },
-        select: { id: true, name: true, code: true },
-      })
-    : [];
+  const pipeline = [
+    { $match: scopedWhere },
+    { $group: { _id: `$${groupField}`, count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ];
 
-  const categoryMap = new Map(categories.map((category) => [category.id, category]));
-  const items = rows.map((row) => ({
-    categoryId: row.categoryId,
-    name: categoryMap.get(row.categoryId)?.name || 'Unknown Category',
-    code: categoryMap.get(row.categoryId)?.code || 'NA',
-    count: row._count._all,
+  if (lookupFrom) {
+    pipeline.push(
+      {
+        $lookup: {
+          from: lookupFrom,
+          localField: '_id',
+          foreignField: '_id',
+          as: '__ref',
+        },
+      },
+      { $unwind: { path: '$__ref', preserveNullAndEmptyArrays: true } },
+      { $addFields: { label: `$__ref.${labelPath}` } }
+    );
+  } else {
+    pipeline.push({ $addFields: { label: '$_id' } });
+  }
+
+  const rows = await Ticket.aggregate(pipeline);
+  const items = rows.map((r) => ({
+    id: r._id ?? null,
+    label: r.label ?? 'Unknown',
+    count: r.count ?? 0,
   }));
 
-  return buildChartData(items, 'name');
+  return buildChartData(items, 'label', 'count');
 };
 
-const getDepartmentWise = async (user) => {
-  const rows = await prisma.ticket.groupBy({
-    by: ['departmentId'],
-    where: buildScopedWhere(user),
-    _count: { _all: true },
-    orderBy: { departmentId: 'asc' },
-  });
+const getCategoryWise = async (user) =>
+  buildGroupChart({ user, groupField: 'categoryId', lookupFrom: 'categories', labelPath: 'name' });
 
-  const departmentIds = rows.map((row) => row.departmentId);
-  const departments = departmentIds.length
-    ? await prisma.department.findMany({
-        where: { id: { in: departmentIds } },
-        select: { id: true, name: true, code: true },
-      })
-    : [];
+const getDepartmentWise = async (user) =>
+  buildGroupChart({ user, groupField: 'departmentId', lookupFrom: 'departments', labelPath: 'name' });
 
-  const departmentMap = new Map(departments.map((department) => [department.id, department]));
-  const items = rows.map((row) => ({
-    departmentId: row.departmentId,
-    name: departmentMap.get(row.departmentId)?.name || 'Unknown Department',
-    code: departmentMap.get(row.departmentId)?.code || 'NA',
-    count: row._count._all,
-  }));
+const getPriorityWise = async (user) => buildGroupChart({ user, groupField: 'priority', lookupFrom: null, labelPath: '' });
 
-  return buildChartData(items, 'name');
-};
-
-const getPriorityWise = async (user) => {
-  const rows = await prisma.ticket.groupBy({
-    by: ['priority'],
-    where: buildScopedWhere(user),
-    _count: { _all: true },
-    orderBy: { priority: 'asc' },
-  });
-
-  const items = rows.map((row) => ({
-    priority: row.priority,
-    count: row._count._all,
-  }));
-
-  return buildChartData(items, 'priority');
-};
-
-const getStatusWise = async (user) => {
-  const rows = await prisma.ticket.groupBy({
-    by: ['status'],
-    where: buildScopedWhere(user),
-    _count: { _all: true },
-    orderBy: { status: 'asc' },
-  });
-
-  const items = rows.map((row) => ({
-    status: row.status,
-    count: row._count._all,
-  }));
-
-  return buildChartData(items, 'status');
-};
+const getStatusWise = async (user) => buildGroupChart({ user, groupField: 'status', lookupFrom: null, labelPath: '' });
 
 const getTechnicianPerformance = async (user) => {
   ensureDashboardAccess(user);
 
-  if (!DASHBOARD_FULL_ACCESS_ROLES.includes(user.role)) {
-    return buildChartData([], 'name');
-  }
+  const baseMatch = buildScopedWhere(user, { assignedToId: { $ne: null } });
 
-  const [assignedRows, resolvedRows] = await Promise.all([
-    prisma.ticket.groupBy({
-      by: ['assignedToId'],
-      where: {
-        assignedToId: { not: null },
+  const pipeline = [
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: '$assignedToId',
+        assignedCount: { $sum: 1 },
+        resolvedCount: {
+          $sum: {
+            $cond: [{ $in: ['$status', [TicketStatus.RESOLVED, TicketStatus.CLOSED]] }, 1, 0],
+          },
+        },
       },
-      _count: { _all: true },
-    }),
-    prisma.ticket.groupBy({
-      by: ['assignedToId'],
-      where: {
-        assignedToId: { not: null },
-        status: TicketStatus.RESOLVED,
-      },
-      _count: { _all: true },
-    }),
-  ]);
+    },
+    { $sort: { assignedCount: -1 } },
+    { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: '__user' } },
+    { $unwind: { path: '$__user', preserveNullAndEmptyArrays: true } },
+    { $addFields: { name: { $ifNull: ['$__user.fullName', 'Unknown Technician'] } } },
+  ];
 
-  const technicianIds = Array.from(
-    new Set([...assignedRows.map((row) => row.assignedToId), ...resolvedRows.map((row) => row.assignedToId)].filter(Boolean))
-  );
-
-  const technicians = technicianIds.length
-    ? await prisma.user.findMany({
-        where: { id: { in: technicianIds } },
-        select: { id: true, fullName: true, email: true, role: true },
-      })
-    : [];
-
-  const technicianMap = new Map(technicians.map((tech) => [tech.id, tech]));
-  const resolvedMap = new Map(resolvedRows.map((row) => [row.assignedToId, row._count._all]));
-
-  const items = assignedRows.map((row) => ({
-    technicianId: row.assignedToId,
-    name: technicianMap.get(row.assignedToId)?.fullName || 'Unknown Technician',
-    assignedCount: row._count._all,
-    resolvedCount: resolvedMap.get(row.assignedToId) || 0,
+  const rows = await Ticket.aggregate(pipeline);
+  const items = rows.map((r) => ({
+    technicianId: r._id ?? null,
+    name: r.name ?? 'Unknown Technician',
+    assignedCount: r.assignedCount ?? 0,
+    resolvedCount: r.resolvedCount ?? 0,
   }));
 
   return {
-    labels: items.map((item) => item.name),
-    assignedSeries: items.map((item) => item.assignedCount),
-    resolvedSeries: items.map((item) => item.resolvedCount),
+    labels: items.map((i) => i.name),
+    assignedSeries: items.map((i) => i.assignedCount),
+    resolvedSeries: items.map((i) => i.resolvedCount),
     items,
   };
 };
 
-const getMonthlyTrend = async (user, query) => {
-  const today = new Date();
+const getMonthlyTrend = async (user, query = {}) => {
+  ensureDashboardAccess(user);
   const months = query.months ? parsePositiveInt(query.months, 'months') : 6;
-  if (months > 24) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'months cannot be greater than 24');
-  }
+  const cappedMonths = Math.min(months, 24);
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - (cappedMonths - 1), 1, 0, 0, 0, 0);
 
-  const items = [];
-
-  for (let offset = months - 1; offset >= 0; offset -= 1) {
-    const monthDate = new Date(today.getFullYear(), today.getMonth() - offset, 1);
-    const from = startOfMonth(monthDate.getFullYear(), monthDate.getMonth());
-    const to = endOfMonth(monthDate.getFullYear(), monthDate.getMonth());
-
-    const count = await prisma.ticket.count({
-      where: buildScopedWhere(user, {
-        createdAt: {
-          gte: from,
-          lte: to,
+  const baseMatch = buildScopedWhere(user, { createdAt: { $gte: start } });
+  const rows = await Ticket.aggregate([
+    { $match: baseMatch },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
         },
-      }),
-    });
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { '_id.year': 1, '_id.month': 1 } },
+  ]);
 
-    items.push({
-      month: monthDate.toLocaleString('en-US', { month: 'short', year: 'numeric' }),
-      count,
-    });
-  }
+  const items = rows.map((r) => ({
+    month: `${r._id.year}-${String(r._id.month).padStart(2, '0')}`,
+    count: r.count ?? 0,
+  }));
 
   return buildChartData(items, 'month');
 };

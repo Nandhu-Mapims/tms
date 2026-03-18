@@ -1,16 +1,15 @@
 const { StatusCodes } = require('http-status-codes');
-const { prisma } = require('../../config/database');
 const ApiError = require('../../utils/ApiError');
-const parsePositiveInt = require('../../utils/parsePositiveInt');
 const { canViewInternalComments, ensureInternalCommentPermission, createActivityLog } = require('./ticketActivity.service');
 const { getTicketForAccess } = require('./ticket.shared');
+const TicketComment = require('../../models/TicketComment.model');
+const User = require('../../models/User.model');
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
 
 const addComment = async (ticketId, payload, user) => {
-  const parsedTicketId = parsePositiveInt(ticketId, 'id');
-  const ticket = await getTicketForAccess(parsedTicketId, user);
-  const comment = normalizeText(payload.comment);
+  const ticket = await getTicketForAccess(ticketId, user);
+  const comment = normalizeText(payload?.comment);
   const isInternal = payload.isInternal === true;
 
   if (!comment) {
@@ -19,61 +18,59 @@ const addComment = async (ticketId, payload, user) => {
 
   ensureInternalCommentPermission(user, isInternal);
 
-  return prisma.$transaction(async (tx) => {
-    const createdComment = await tx.ticketComment.create({
-      data: {
-        ticketId: ticket.id,
-        userId: user.id,
-        comment,
-        isInternal,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-    });
-
-    await createActivityLog(tx, {
-      ticketId: ticket.id,
-      userId: user.id,
-      action: 'COMMENT_ADDED',
-      newValue: { comment, isInternal },
-      remarks: isInternal ? 'Internal ticket comment added' : 'Public ticket comment added',
-    });
-
-    return createdComment;
+  const createdComment = await TicketComment.create({
+    ticketId: ticket._id,
+    authorId: user.id,
+    content: comment,
+    isInternal,
   });
+
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'COMMENT_ADDED',
+    newValue: { comment, isInternal },
+    remarks: isInternal ? 'Internal ticket comment added' : 'Public ticket comment added',
+  });
+
+  const author = await User.findById(createdComment.authorId).select('fullName email role').lean();
+  return {
+    id: createdComment._id.toString(),
+    ticketId: createdComment.ticketId.toString(),
+    userId: createdComment.authorId.toString(),
+    comment: createdComment.content,
+    isInternal: createdComment.isInternal,
+    createdAt: createdComment.createdAt,
+    user: author
+      ? { id: author._id.toString(), fullName: author.fullName, email: author.email, role: author.role }
+      : null,
+  };
 };
 
 const getComments = async (ticketId, user) => {
-  const parsedTicketId = parsePositiveInt(ticketId, 'id');
-  const ticket = await getTicketForAccess(parsedTicketId, user);
+  const ticket = await getTicketForAccess(ticketId, user);
 
   const where = {
-    ticketId: ticket.id,
+    ticketId: ticket._id,
     ...(canViewInternalComments(user) ? {} : { isInternal: false }),
   };
 
-  return prisma.ticketComment.findMany({
-    where,
-    include: {
-      user: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          role: true,
-        },
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+  const comments = await TicketComment.find(where)
+    .sort({ createdAt: 1 })
+    .populate({ path: 'authorId', select: 'fullName email role' })
+    .lean();
+
+  return comments.map((c) => ({
+    id: c._id.toString(),
+    ticketId: c.ticketId.toString(),
+    userId: c.authorId?._id?.toString?.() ?? null,
+    comment: c.content,
+    isInternal: c.isInternal,
+    createdAt: c.createdAt,
+    user: c.authorId
+      ? { id: c.authorId._id.toString(), fullName: c.authorId.fullName, email: c.authorId.email, role: c.authorId.role }
+      : null,
+  }));
 };
 
 module.exports = {

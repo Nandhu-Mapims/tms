@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
 const { StatusCodes } = require('http-status-codes');
-const { prisma } = require('../config/database');
 const { env } = require('../config');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const sanitizeUser = require('../utils/sanitizeUser');
+const User = require('../models/User.model');
 
 const protect = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -22,9 +22,7 @@ const protect = asyncHandler(async (req, res, next) => {
     throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid or expired authentication token');
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.userId },
-  });
+  const user = await User.findById(decoded.userId);
 
   if (!user || !user.isActive) {
     throw new ApiError(StatusCodes.UNAUTHORIZED, 'User account is inactive or not found');

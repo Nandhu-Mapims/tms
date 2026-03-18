@@ -26,7 +26,9 @@ function AppRoutes() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/tickets" element={<TicketListPage />} />
-          <Route path="/tickets/create" element={<TicketCreatePage />} />
+          <Route element={<ProtectedRoute allowedRoles={['REQUESTER']} />}>
+            <Route path="/tickets/create" element={<TicketCreatePage />} />
+          </Route>
           <Route path="/tickets/:id" element={<TicketDetailsPage />} />
         </Route>
       </Route>
@@ -37,6 +39,11 @@ function AppRoutes() {
           <Route path="/admin/categories" element={<CategoriesPage />} />
           <Route path="/admin/subcategories" element={<SubcategoriesPage />} />
           <Route path="/admin/locations" element={<LocationsPage />} />
+        </Route>
+      </Route>
+
+      <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
+        <Route element={<MainLayout />}>
           <Route path="/admin/sla-settings" element={<SlaSettingsPage />} />
         </Route>
       </Route>

@@ -1,12 +1,12 @@
 const { MulterError } = require('multer');
-const { PrismaClientKnownRequestError } = require('@prisma/client/runtime/library');
 const { StatusCodes } = require('http-status-codes');
 
 const globalErrorHandler = (err, req, res, next) => {
   let statusCode = err.statusCode || StatusCodes.INTERNAL_SERVER_ERROR;
   let message = err.message || 'Internal server error';
 
-  if (err instanceof PrismaClientKnownRequestError && err.code === 'P2002') {
+  // MongoDB duplicate key error (unique index violation)
+  if (err?.code === 11000) {
     statusCode = StatusCodes.CONFLICT;
     message = 'A record with this value already exists';
   }

@@ -1,11 +1,11 @@
 const bcrypt = require('bcryptjs');
-const { Role } = require('../../../generated/prisma');
+const { Role } = require('../../models/enums');
 const { StatusCodes } = require('http-status-codes');
-const { prisma } = require('../../config/database');
 const { env } = require('../../config');
 const ApiError = require('../../utils/ApiError');
 const generateToken = require('../../utils/generateToken');
 const sanitizeUser = require('../../utils/sanitizeUser');
+const User = require('../../models/User.model');
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -53,15 +53,12 @@ const registerUser = async (payload) => {
 
   const normalizedEmpId = empId.trim();
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
-  const normalizedDepartmentId = normalizeDepartmentId(departmentId);
+  // Mongo uses ObjectId; keep null for missing values and let later modules validate.
+  const normalizedDepartmentId = departmentId ? String(departmentId) : null;
 
   const [existingEmpId, existingEmail] = await Promise.all([
-    prisma.user.findUnique({ where: { empId: normalizedEmpId } }),
-    normalizedEmail
-      ? prisma.user.findUnique({
-          where: { email: normalizedEmail },
-        })
-      : null,
+    User.findOne({ empId: normalizedEmpId }).lean(),
+    normalizedEmail ? User.findOne({ email: normalizedEmail }).lean() : null,
   ]);
 
   if (existingEmpId) {
@@ -74,16 +71,14 @@ const registerUser = async (payload) => {
 
   const hashedPassword = await bcrypt.hash(password, env.bcryptSaltRounds);
 
-  const user = await prisma.user.create({
-    data: {
-      fullName: fullName.trim(),
-      empId: normalizedEmpId,
-      email: normalizedEmail,
-      phone: phone ? phone.trim() : null,
-      password: hashedPassword,
-      role,
-      departmentId: normalizedDepartmentId,
-    },
+  const user = await User.create({
+    fullName: fullName.trim(),
+    empId: normalizedEmpId,
+    email: normalizedEmail,
+    phone: phone ? phone.trim() : null,
+    password: hashedPassword,
+    role,
+    departmentId: normalizedDepartmentId,
   });
 
   return sanitizeUser(user);
@@ -98,9 +93,7 @@ const loginUser = async (payload) => {
 
   const normalizedEmpId = empId.trim();
 
-  const user = await prisma.user.findUnique({
-    where: { empId: normalizedEmpId },
-  });
+  const user = await User.findOne({ empId: normalizedEmpId });
 
   if (!user) {
     throw new ApiError(StatusCodes.UNAUTHORIZED, 'Invalid employee ID or password');
@@ -117,7 +110,7 @@ const loginUser = async (payload) => {
   }
 
   const token = generateToken({
-    userId: user.id,
+    userId: user._id.toString(),
     role: user.role,
     email: user.email,
   });
@@ -129,9 +122,7 @@ const loginUser = async (payload) => {
 };
 
 const getCurrentUser = async (userId) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-  });
+  const user = await User.findById(userId);
 
   if (!user || !user.isActive) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Authenticated user not found');

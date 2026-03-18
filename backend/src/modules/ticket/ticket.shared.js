@@ -1,19 +1,23 @@
-const { Role } = require('../../../generated/prisma');
 const { StatusCodes } = require('http-status-codes');
-const { prisma } = require('../../config/database');
 const ApiError = require('../../utils/ApiError');
 const { STAFF_VIEW_ROLES } = require('./ticket.constants');
+const { Role } = require('../../models/enums');
+const Ticket = require('../../models/Ticket.model');
 
 const ensureCanViewTicket = (user, ticket) => {
   if (STAFF_VIEW_ROLES.includes(user.role)) {
     return;
   }
 
-  if (user.role === Role.REQUESTER && ticket.requesterId === user.id) {
+  const userId = user?.id?.toString?.() ?? String(user?.id ?? '');
+  const requesterId = ticket?.requesterId?.toString?.() ?? String(ticket?.requesterId ?? '');
+  const assignedToId = ticket?.assignedToId?.toString?.() ?? String(ticket?.assignedToId ?? '');
+
+  if (user.role === Role.REQUESTER && requesterId === userId) {
     return;
   }
 
-  if (ticket.assignedToId === user.id) {
+  if (assignedToId && assignedToId === userId) {
     return;
   }
 
@@ -21,9 +25,7 @@ const ensureCanViewTicket = (user, ticket) => {
 };
 
 const getTicketForAccess = async (ticketId, user) => {
-  const ticket = await prisma.ticket.findUnique({
-    where: { id: ticketId },
-  });
+  const ticket = await Ticket.findById(ticketId);
 
   if (!ticket) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
