@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { API_PUBLIC_BASE_URL } from '../../config/appConfig';
 import { formatDateTime } from '../../utils/ticketHelpers';
 import { validateFile } from '../../utils/validators';
@@ -12,6 +12,17 @@ const ALLOWED_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain',
 ];
+
+const FILE_ACCEPT = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.txt',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+].join(',');
 
 function TicketAttachmentsSection({ attachments, onUpload, isUploading }) {
   const [file, setFile] = useState(null);
@@ -50,10 +61,12 @@ function TicketAttachmentsSection({ attachments, onUpload, isUploading }) {
             <label className="form-label">Upload Attachment</label>
             <input
               type="file"
+              accept={FILE_ACCEPT}
               className={`form-control ${errorMessage ? 'is-invalid' : ''}`}
               onChange={(event) => {
-                setFile(event.target.files?.[0] || null);
-                setErrorMessage('');
+                const nextFile = event.target.files?.[0] ?? null;
+                setFile(nextFile);
+                setErrorMessage(validateFile(nextFile, { allowedTypes: ALLOWED_TYPES }));
               }}
             />
             {errorMessage ? <div className="invalid-feedback">{errorMessage}</div> : null}

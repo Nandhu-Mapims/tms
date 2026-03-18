@@ -44,16 +44,6 @@ const updateTicket = asyncHandler(async (req, res) => {
   });
 });
 
-const assignTicket = asyncHandler(async (req, res) => {
-  const data = await ticketService.assignTicket(req.params.id, req.body, req.user);
-
-  sendResponse(res, {
-    statusCode: StatusCodes.OK,
-    message: 'Ticket assignment updated successfully',
-    data,
-  });
-});
-
 const updateStatus = asyncHandler(async (req, res) => {
   const data = await ticketService.updateStatus(req.params.id, req.body, req.user);
 
@@ -120,7 +110,6 @@ module.exports = {
   getTickets,
   getTicketById,
   updateTicket,
-  assignTicket,
   updateStatus,
   resolveTicket,
   closeTicket,

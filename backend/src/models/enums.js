@@ -4,7 +4,6 @@ const Role = Object.freeze({
   ADMIN: 'ADMIN',
   HELPDESK: 'HELPDESK',
   HOD: 'HOD',
-  TECHNICIAN: 'TECHNICIAN',
   REQUESTER: 'REQUESTER',
 });
 

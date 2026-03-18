@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { canUseInternalComments, formatDateTime } from '../../utils/ticketHelpers';
 
 function TicketCommentsSection({ comments, userRole, onSubmit, isSubmitting }) {
@@ -24,7 +24,7 @@ function TicketCommentsSection({ comments, userRole, onSubmit, isSubmitting }) {
     <div className="card border-0 shadow-sm h-100">
       <div className="card-body p-4">
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h2 className="h5 mb-0">Comments</h2>
+          <h2 className="h5 mb-0">Chat</h2>
           <span className="badge text-bg-light">{comments.length}</span>
         </div>
 
@@ -32,7 +32,7 @@ function TicketCommentsSection({ comments, userRole, onSubmit, isSubmitting }) {
           <textarea
             className={`form-control ${errorMessage ? 'is-invalid' : ''}`}
             rows="3"
-            placeholder="Add an operational update or requester-visible note"
+            placeholder="Type a message…"
             value={comment}
             onChange={(event) => {
               setComment(event.target.value);
@@ -58,7 +58,7 @@ function TicketCommentsSection({ comments, userRole, onSubmit, isSubmitting }) {
           ) : null}
           <div>
             <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Posting...' : 'Add Comment'}
+              {isSubmitting ? 'Sending...' : 'Send'}
             </button>
           </div>
         </form>
@@ -78,7 +78,7 @@ function TicketCommentsSection({ comments, userRole, onSubmit, isSubmitting }) {
               </div>
               <p className="mb-0 text-secondary">{item.comment}</p>
             </div>
-          )) : <div className="border rounded-4 p-3 text-secondary small">No comments added yet.</div>}
+          )) : <div className="border rounded-4 p-3 text-secondary small">No messages yet.</div>}
         </div>
       </div>
     </div>

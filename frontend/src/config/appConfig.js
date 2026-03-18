@@ -6,7 +6,6 @@ export const API_PUBLIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 export const ROLE_LABELS = {
   ADMIN: 'Administrator',
   HELPDESK: 'Helpdesk',
-  TECHNICIAN: 'Technician',
   HOD: 'Head of Department',
   REQUESTER: 'Requester',
 };
@@ -17,14 +16,14 @@ export const NAV_ITEMS = [
     label: 'Dashboard',
     icon: 'bi-speedometer2',
     path: '/dashboard',
-    roles: ['ADMIN', 'HELPDESK', 'TECHNICIAN', 'HOD', 'REQUESTER'],
+    roles: ['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER'],
   },
   {
     key: 'tickets',
     label: 'Tickets',
     icon: 'bi-file-earmark-medical',
     path: '/tickets',
-    roles: ['ADMIN', 'HELPDESK', 'TECHNICIAN', 'HOD', 'REQUESTER'],
+    roles: ['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER'],
   },
   {
     key: 'create-ticket',

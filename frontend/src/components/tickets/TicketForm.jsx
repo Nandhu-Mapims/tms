@@ -1,4 +1,4 @@
-﻿import { PRIORITY_OPTIONS } from '../../utils/ticketHelpers';
+import { PRIORITY_OPTIONS } from '../../utils/ticketHelpers';
 
 function TicketForm({
   formState,
@@ -12,6 +12,17 @@ function TicketForm({
   onSubmit,
   isSubmitting,
 }) {
+  const attachmentAccept = [
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.txt',
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.webp',
+  ].join(',');
+
   const handleInputChange = (event) => {
     const { name, value } = event.target;
     onChange(name, value);
@@ -114,14 +125,6 @@ function TicketForm({
             {errors.locationId ? <div className="invalid-feedback">{errors.locationId}</div> : null}
           </div>
           <div className="col-md-6">
-            <label className="form-label fw-semibold">Asset Name</label>
-            <input type="text" name="assetName" className="form-control" value={formState.assetName} onChange={handleInputChange} maxLength="100" />
-          </div>
-          <div className="col-md-6">
-            <label className="form-label fw-semibold">Asset ID</label>
-            <input type="text" name="assetId" className="form-control" value={formState.assetId} onChange={handleInputChange} maxLength="60" />
-          </div>
-          <div className="col-md-6">
             <label className="form-label fw-semibold">Priority</label>
             <select
               name="priority"
@@ -139,22 +142,22 @@ function TicketForm({
             {errors.priority ? <div className="invalid-feedback">{errors.priority}</div> : null}
           </div>
           <div className="col-md-6">
-            <label className="form-label fw-semibold">Requester Contact</label>
+            <label className="form-label fw-semibold">Telecom Number (Optional)</label>
             <input
               type="text"
-              name="requesterContact"
-              className={`form-control ${errors.requesterContact ? 'is-invalid' : ''}`}
-              value={formState.requesterContact}
+              name="telecomNumber"
+              className="form-control"
+              value={formState.telecomNumber}
               onChange={handleInputChange}
               placeholder="Extension / mobile number"
               maxLength="80"
             />
-            {errors.requesterContact ? <div className="invalid-feedback">{errors.requesterContact}</div> : null}
           </div>
           <div className="col-12">
             <label className="form-label fw-semibold">Attachment (Optional)</label>
             <input
               type="file"
+              accept={attachmentAccept}
               className={`form-control ${errors.attachment ? 'is-invalid' : ''}`}
               onChange={(event) => onFileChange(event.target.files?.[0] || null)}
             />

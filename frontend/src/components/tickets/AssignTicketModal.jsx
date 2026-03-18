@@ -46,17 +46,18 @@ function AssignTicketModal({ show, ticket, onClose, onSubmit, isSubmitting }) {
     event.preventDefault();
 
     const team = String(formState.assignedTeam ?? '').trim();
-    const userId = formState.assignedToId === '' || formState.assignedToId == null ? null : Number(formState.assignedToId);
+    const userId =
+      formState.assignedToId === '' || formState.assignedToId == null ? null : String(formState.assignedToId).trim();
 
-    if (!team && (userId == null || Number.isNaN(userId) || userId <= 0)) {
-      setErrorMessage('Provide at least an assigned team or select a technician.');
+    if (!team && !userId) {
+      setErrorMessage('Provide at least an assigned team or select a user.');
       return;
     }
 
     setErrorMessage('');
     await onSubmit({
       assignedTeam: team,
-      assignedToId: userId && Number.isFinite(userId) ? userId : null,
+      assignedToId: userId || null,
     });
   };
 
@@ -84,20 +85,20 @@ function AssignTicketModal({ show, ticket, onClose, onSubmit, isSubmitting }) {
                 />
               </div>
               <div>
-                <label className="form-label">Assign to Technician</label>
+                <label className="form-label">Assign to User</label>
                 {usersLoading ? (
-                  <div className="form-control-plaintext small text-secondary">Loading technicians...</div>
+                  <div className="form-control-plaintext small text-secondary">Loading users...</div>
                 ) : assignableUsers.length > 0 ? (
                   <select
                     className={`form-select ${errorMessage ? 'is-invalid' : ''}`}
                     value={formState.assignedToId !== '' && formState.assignedToId != null ? String(formState.assignedToId) : ''}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setFormState((prev) => ({ ...prev, assignedToId: val === '' ? '' : Number(val) }));
+                      setFormState((prev) => ({ ...prev, assignedToId: val === '' ? '' : val }));
                       setErrorMessage('');
                     }}
                   >
-                    <option value="">— Select technician (optional) —</option>
+                    <option value="">— Select user (optional) —</option>
                     {assignableUsers.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.fullName} ({u.email})
@@ -106,20 +107,19 @@ function AssignTicketModal({ show, ticket, onClose, onSubmit, isSubmitting }) {
                   </select>
                 ) : (
                   <input
-                    type="number"
-                    min="1"
+                    type="text"
                     className={`form-control ${errorMessage ? 'is-invalid' : ''}`}
                     value={formState.assignedToId ?? ''}
                     onChange={(e) => {
                       setFormState((prev) => ({ ...prev, assignedToId: e.target.value }));
                       setErrorMessage('');
                     }}
-                    placeholder="Enter technician user ID"
+                    placeholder="Enter user id"
                   />
                 )}
                 {errorMessage ? <div className="invalid-feedback">{errorMessage}</div> : null}
                 {assignableUsers.length === 0 && !usersLoading ? (
-                  <div className="form-text">Select a technician from the list or enter user ID if you have it.</div>
+                  <div className="form-text">Select a user from the list or enter user id if you have it.</div>
                 ) : null}
               </div>
             </div>

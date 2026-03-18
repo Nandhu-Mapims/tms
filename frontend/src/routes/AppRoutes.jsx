@@ -21,7 +21,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-      <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'HELPDESK', 'TECHNICIAN', 'HOD', 'REQUESTER']} />}>
+      <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER']} />}>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />

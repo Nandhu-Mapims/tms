@@ -108,7 +108,7 @@ function UserManagementPage() {
           label: 'Role',
           type: 'select',
           required: true,
-          options: ['ADMIN', 'HELPDESK', 'TECHNICIAN', 'HOD', 'REQUESTER'].map((value) => ({ value, label: value })),
+          options: ['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER'].map((value) => ({ value, label: value })),
           colClass: 'col-md-6',
         },
         {

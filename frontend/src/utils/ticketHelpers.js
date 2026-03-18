@@ -72,10 +72,28 @@ export const formatDateTime = (value) => {
   }).format(new Date(value));
 };
 
-export const canAssignTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
 export const canResolveTicket = (role, ticket, userId) =>
-  ['ADMIN', 'HELPDESK', 'HOD'].includes(role) || ticket?.assignedToId === userId;
+  ['ADMIN', 'HELPDESK', 'HOD'].includes(role) || ticket?.requesterId === userId;
 export const canCloseTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
 export const canReopenTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
 export const canEscalateTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
-export const canUseInternalComments = (role) => ['ADMIN', 'HELPDESK', 'HOD', 'TECHNICIAN'].includes(role);
+export const canUseInternalComments = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
+
+export const getTimeTakenLabel = (ticket) => {
+  const createdAt = ticket?.createdAt ? new Date(ticket.createdAt) : null;
+  const end =
+    ticket?.closedAt ? new Date(ticket.closedAt) : ticket?.cancelledAt ? new Date(ticket.cancelledAt) : ticket?.resolvedAt ? new Date(ticket.resolvedAt) : null;
+
+  if (!createdAt || Number.isNaN(createdAt.getTime())) return 'Not available';
+  if (!end || Number.isNaN(end.getTime())) {
+    const diffMs = Date.now() - createdAt.getTime();
+    const days = Math.floor(diffMs / 86400000);
+    return days <= 0 ? 'Opened today' : `${days} day(s) open`;
+  }
+
+  const diffMs = Math.max(0, end.getTime() - createdAt.getTime());
+  const days = Math.floor(diffMs / 86400000);
+  const hours = Math.floor((diffMs % 86400000) / 3600000);
+  if (days > 0) return `${days}d ${hours}h`;
+  return `${Math.max(0, hours)}h`;
+};

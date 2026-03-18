@@ -1,9 +1,8 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
 import PageHeader from '../../components/common/PageHeader.jsx';
-import AssignTicketModal from '../../components/tickets/AssignTicketModal.jsx';
 import TicketActivityTimeline from '../../components/tickets/TicketActivityTimeline.jsx';
 import TicketAttachmentsSection from '../../components/tickets/TicketAttachmentsSection.jsx';
 import TicketCommentsSection from '../../components/tickets/TicketCommentsSection.jsx';
@@ -14,7 +13,6 @@ import { useToast } from '../../hooks/useToast';
 import {
   addTicketAttachmentRequest,
   addTicketCommentRequest,
-  assignTicketRequest,
   closeTicketRequest,
   escalateTicketRequest,
   getTicketActivityLogRequest,
@@ -26,14 +24,16 @@ import {
   updateTicketStatusRequest,
 } from '../../services/ticketService';
 import {
-  canAssignTicket,
   canCloseTicket,
   canEscalateTicket,
   canReopenTicket,
   canResolveTicket,
   formatDateTime,
+  getTimeTakenLabel,
 } from '../../utils/ticketHelpers';
 import { getErrorMessage } from '../../utils/getErrorMessage';
+
+const CHAT_POLL_INTERVAL_MS = 10_000;
 
 function TicketDetailsPage() {
   const { id } = useParams();
@@ -46,8 +46,6 @@ function TicketDetailsPage() {
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState('');
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -66,7 +64,8 @@ function TicketDetailsPage() {
         getTicketActivityLogRequest(id),
       ]);
 
-      setTicket(ticketResponse.data);
+      const ticketData = ticketResponse.data;
+      setTicket(ticketData ? { ...ticketData, timeTakenLabel: getTimeTakenLabel(ticketData) } : null);
       setComments(commentsResponse.data);
       setAttachments(attachmentsResponse.data);
       setActivities(activityResponse.data);
@@ -82,6 +81,39 @@ function TicketDetailsPage() {
 
   useEffect(() => {
     loadTicketDetails();
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const poll = async () => {
+      try {
+        const [commentsResponse, activityResponse] = await Promise.all([
+          getTicketCommentsRequest(id),
+          getTicketActivityLogRequest(id),
+        ]);
+
+        if (isCancelled) {
+          return;
+        }
+
+        setComments(commentsResponse.data);
+        setActivities(activityResponse.data);
+      } catch {
+        // Fail silently — chat polling is non-critical.
+      }
+    };
+
+    const intervalId = window.setInterval(poll, CHAT_POLL_INTERVAL_MS);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, [id]);
 
   const executeAction = async ({ action, successMessage, confirmOptions }) => {
@@ -105,23 +137,6 @@ function TicketDetailsPage() {
       toast.error(message);
     } finally {
       setIsActionLoading(false);
-    }
-  };
-
-  const handleAssign = async (payload) => {
-    setIsAssigning(true);
-
-    try {
-      await assignTicketRequest(id, payload);
-      setShowAssignModal(false);
-      await loadTicketDetails(false);
-      toast.success(ticket?.assignedToId ? 'Ticket reassigned successfully.' : 'Ticket assigned successfully.');
-    } catch (error) {
-      const message = getErrorMessage(error, 'Unable to assign ticket.');
-      setPageError(message);
-      toast.error(message);
-    } finally {
-      setIsAssigning(false);
     }
   };
 
@@ -174,8 +189,8 @@ function TicketDetailsPage() {
   if (!ticket) {
     return (
       <EmptyState
-        title="Ticket not found"
-        description="The requested ticket could not be loaded."
+        title={pageError ? 'Unable to open ticket' : 'Ticket not found'}
+        description={pageError || 'The requested ticket could not be loaded.'}
         action={
           <Link to="/tickets" className="btn btn-primary">
             Back to Tickets
@@ -190,14 +205,6 @@ function TicketDetailsPage() {
       Back to List
     </Link>,
   ];
-
-  if (canAssignTicket(user?.role)) {
-    actions.push(
-      <button key="assign" type="button" className="btn btn-outline-primary" onClick={() => setShowAssignModal(true)}>
-        {ticket.assignedToId ? 'Reassign' : 'Assign'}
-      </button>
-    );
-  }
 
   if (user?.role !== 'REQUESTER') {
     actions.push(
@@ -366,24 +373,20 @@ function TicketDetailsPage() {
                   </span>
                 </div>
                 <div className="col-md-6">
-                  <span className="text-secondary d-block">Requester Contact</span>
-                  <span className="fw-semibold">{ticket.requesterContact}</span>
+                  <span className="text-secondary d-block">Telecom Number</span>
+                  <span className="fw-semibold">{ticket.telecomNumber || 'Not available'}</span>
                 </div>
                 <div className="col-md-6">
                   <span className="text-secondary d-block">Assigned Team</span>
                   <span className="fw-semibold">{ticket.assignedTeam || 'Not assigned'}</span>
                 </div>
                 <div className="col-md-6">
-                  <span className="text-secondary d-block">Assigned Technician</span>
-                  <span className="fw-semibold">{ticket.assignedTo?.fullName || 'Not assigned'}</span>
-                </div>
-                <div className="col-md-6">
                   <span className="text-secondary d-block">Created</span>
                   <span className="fw-semibold">{formatDateTime(ticket.createdAt)}</span>
                 </div>
                 <div className="col-md-6">
-                  <span className="text-secondary d-block">Due At</span>
-                  <span className="fw-semibold">{formatDateTime(ticket.dueAt)}</span>
+                  <span className="text-secondary d-block">Time Taken</span>
+                  <span className="fw-semibold">{ticket.timeTakenLabel || 'In progress'}</span>
                 </div>
                 <div className="col-md-6">
                   <span className="text-secondary d-block">Resolved At</span>
@@ -440,13 +443,6 @@ function TicketDetailsPage() {
         </div>
       </div>
 
-      <AssignTicketModal
-        show={showAssignModal}
-        ticket={ticket}
-        onClose={() => setShowAssignModal(false)}
-        onSubmit={handleAssign}
-        isSubmitting={isAssigning}
-      />
     </>
   );
 }

@@ -184,11 +184,10 @@ const seed = async () => {
   console.log(`Seeded ${locations.length} locations`);
 
   // Users
-  const [adminPwd, helpdeskPwd, hodPwd, techPwd, requesterPwd] = await Promise.all([
+  const [adminPwd, helpdeskPwd, hodPwd, requesterPwd] = await Promise.all([
     hash(process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345'),
     hash('Helpdesk@12345'),
     hash('Hod@12345'),
-    hash('Tech@12345'),
     hash('User@12345'),
   ]);
 
@@ -239,24 +238,6 @@ const seed = async () => {
       departmentId: deptByCode['RADIO']._id,
     },
     {
-      fullName: 'Technician Ravi Kumar',
-      empId: 'EMP-TECH-001',
-      email: 'tech1@tmshospital.com',
-      phone: '9000000005',
-      password: techPwd,
-      role: Role.TECHNICIAN,
-      departmentId: deptByCode['IT']._id,
-    },
-    {
-      fullName: 'Technician Priya Sharma',
-      empId: 'EMP-TECH-002',
-      email: 'tech2@tmshospital.com',
-      phone: '9000000006',
-      password: techPwd,
-      role: Role.TECHNICIAN,
-      departmentId: deptByCode['IT']._id,
-    },
-    {
       fullName: 'Nurse Anita Patel',
       empId: 'EMP-REQ-001',
       email: 'anita.patel@tmshospital.com',
@@ -288,7 +269,6 @@ const seed = async () => {
   const users = await User.insertMany(usersData);
   const userByRole = (role) => users.filter((u) => u.role === role);
   const requesters = userByRole(Role.REQUESTER);
-  const technicians = userByRole(Role.TECHNICIAN);
   const helpdesks = userByRole(Role.HELPDESK);
   console.log(`Seeded ${users.length} users`);
 
@@ -426,7 +406,7 @@ const seed = async () => {
     const def = ticketDefs[i];
     const requester = randomItem(requesters);
     const assignee = [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.ESCALATED, TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(def.status)
-      ? randomItem([...technicians, ...helpdesks])
+      ? randomItem([...helpdesks])
       : null;
 
     const createdAt = daysAgo(def.createdDaysAgo);

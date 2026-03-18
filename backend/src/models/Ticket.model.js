@@ -17,6 +17,7 @@ const ticketSchema = new mongoose.Schema(
     locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', required: true },
     requesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     assignedToId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    telecomNumber: { type: String, default: null },
 
     firstResponseDueAt: { type: Date, default: null },
     resolutionDueAt: { type: Date, default: null },

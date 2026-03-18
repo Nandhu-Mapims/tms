@@ -22,8 +22,7 @@ const endOfDay = (date = new Date()) => {
 const ensureDashboardAccess = (user) => {
   if (
     DASHBOARD_FULL_ACCESS_ROLES.includes(user.role) ||
-    user.role === Role.REQUESTER ||
-    user.role === Role.TECHNICIAN
+    user.role === Role.REQUESTER
   ) {
     return;
   }
@@ -53,8 +52,6 @@ const buildScopedWhere = (user, filters = {}) => {
 
   if (user.role === Role.REQUESTER) {
     where.requesterId = toObjectId(user.id, 'userId');
-  } else if (user.role === Role.TECHNICIAN) {
-    where.assignedToId = toObjectId(user.id, 'userId');
   }
 
   return where;

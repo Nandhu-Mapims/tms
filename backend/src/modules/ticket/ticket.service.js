@@ -16,7 +16,7 @@ const Location = require('../../models/Location.model');
 const User = require('../../models/User.model');
 const Ticket = require('../../models/Ticket.model');
 
-const ASSIGNABLE_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD, Role.TECHNICIAN];
+const ASSIGNABLE_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD];
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
 
@@ -114,10 +114,32 @@ const shapeTicket = (ticket) => {
   };
 };
 
+const findTicketQuery = (identifier) => {
+  const normalized = String(identifier ?? '').trim();
+  if (!normalized) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Ticket id is required');
+  }
+
+  return mongoose.Types.ObjectId.isValid(normalized)
+    ? Ticket.findById(normalized)
+    : Ticket.findOne({ ticketNumber: normalized });
+};
+
+const getTicketDocOrThrow = async (identifier) => {
+  const ticket = await findTicketQuery(identifier);
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  return ticket;
+};
+
+const getTicketLeanOrThrow = async (identifier) => {
+  const ticket = await populateTicket(findTicketQuery(identifier)).lean();
+  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  return ticket;
+};
+
 const buildScopedWhere = (user) => {
   const where = {};
   if (user.role === Role.REQUESTER) where.requesterId = toObjectId(user.id, 'userId');
-  if (user.role === Role.TECHNICIAN) where.assignedToId = toObjectId(user.id, 'userId');
   return where;
 };
 
@@ -128,6 +150,7 @@ const createTicket = async (payload, user) => {
 
   const title = normalizeText(payload?.title);
   const description = normalizeText(payload?.description) || null;
+  const telecomNumber = normalizeText(payload?.telecomNumber) || null;
   const priority = payload?.priority;
 
   if (!title) throw new ApiError(StatusCodes.BAD_REQUEST, 'title is required');
@@ -154,6 +177,7 @@ const createTicket = async (payload, user) => {
     locationId,
     requesterId: toObjectId(user.id, 'userId'),
     assignedToId: null,
+    telecomNumber,
   });
 
   await createActivityLog(null, {
@@ -225,15 +249,13 @@ const getTickets = async (query, user) => {
 };
 
 const getTicketById = async (id, user) => {
-  const ticket = await populateTicket(Ticket.findById(id)).lean();
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const ticket = await getTicketLeanOrThrow(id);
   ensureCanViewTicket(user, ticket);
   return shapeTicket(ticket);
 };
 
 const updateTicket = async (id, payload, user) => {
-  const ticket = await Ticket.findById(id);
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
   ensureAssigneeOrStaff(user, ticket);
 
@@ -245,37 +267,9 @@ const updateTicket = async (id, payload, user) => {
     updates.priority = payload.priority;
   }
 
-  const updated = await Ticket.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+  const updated = await Ticket.findByIdAndUpdate(ticket._id, updates, { new: true, runValidators: true });
   await createActivityLog(null, { ticketId: updated._id, userId: user.id, action: 'UPDATED', remarks: 'Ticket updated' });
   const full = await populateTicket(Ticket.findById(updated._id)).lean();
-  return shapeTicket(full);
-};
-
-const assignTicket = async (id, payload, user) => {
-  ensureStaffAccess(user);
-  const assignedToId = toObjectId(payload?.assignedToId, 'assignedToId');
-
-  const assignee = await User.findById(assignedToId).lean();
-  if (!assignee || !ASSIGNABLE_ROLES.includes(assignee.role)) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'assignedToId is invalid');
-  }
-
-  const ticket = await Ticket.findById(id);
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
-
-  ticket.assignedToId = assignedToId;
-  ticket.status = TicketStatus.ASSIGNED;
-  await ticket.save();
-
-  await createActivityLog(null, {
-    ticketId: ticket._id,
-    userId: user.id,
-    action: 'ASSIGNED',
-    newValue: assignee.fullName,
-    remarks: 'Ticket assigned',
-  });
-
-  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
   return shapeTicket(full);
 };
 
@@ -283,8 +277,7 @@ const updateStatus = async (id, payload, user) => {
   const status = payload?.status;
   validateStatus(status);
 
-  const ticket = await Ticket.findById(id);
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
   ensureAssigneeOrStaff(user, ticket);
 
@@ -306,8 +299,7 @@ const updateStatus = async (id, payload, user) => {
 };
 
 const resolveTicket = async (id, payload, user) => {
-  const ticket = await Ticket.findById(id);
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
   ensureAssigneeOrStaff(user, ticket);
 
@@ -331,8 +323,7 @@ const resolveTicket = async (id, payload, user) => {
 
 const closeTicket = async (id, user) => {
   ensureStaffAccess(user);
-  const ticket = await Ticket.findById(id);
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const ticket = await getTicketDocOrThrow(id);
   const oldStatus = ticket.status;
   ticket.status = TicketStatus.CLOSED;
   ticket.closedAt = new Date();
@@ -344,8 +335,7 @@ const closeTicket = async (id, user) => {
 
 const reopenTicket = async (id, user) => {
   ensureStaffAccess(user);
-  const ticket = await Ticket.findById(id);
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const ticket = await getTicketDocOrThrow(id);
   const oldStatus = ticket.status;
   ticket.status = TicketStatus.REOPENED;
   ticket.resolvedAt = null;
@@ -361,8 +351,7 @@ const escalateTicket = async (id, payload, user) => {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Only authorized hospital roles can escalate tickets');
   }
 
-  const ticket = await Ticket.findById(id);
-  if (!ticket) throw new ApiError(StatusCodes.NOT_FOUND, 'Ticket not found');
+  const ticket = await getTicketDocOrThrow(id);
   const oldStatus = ticket.status;
   ticket.status = TicketStatus.ESCALATED;
   ticket.escalatedAt = new Date();
@@ -389,7 +378,6 @@ module.exports = {
   getTickets,
   getTicketById,
   updateTicket,
-  assignTicket,
   updateStatus,
   resolveTicket,
   closeTicket,

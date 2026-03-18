@@ -44,11 +44,6 @@ export const updateTicketRequest = async (id, payload) => {
   return response.data;
 };
 
-export const assignTicketRequest = async (id, payload) => {
-  const response = await apiClient.patch(`/tickets/${id}/assign`, payload, jsonConfig);
-  return response.data;
-};
-
 export const updateTicketStatusRequest = async (id, payload) => {
   const response = await apiClient.patch(`/tickets/${id}/status`, payload, jsonConfig);
   return response.data;

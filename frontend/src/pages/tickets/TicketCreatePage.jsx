@@ -16,10 +16,8 @@ const initialFormState = {
   subcategoryId: '',
   departmentId: '',
   locationId: '',
-  assetName: '',
-  assetId: '',
   priority: '',
-  requesterContact: '',
+  telecomNumber: '',
   attachment: null,
 };
 
@@ -102,7 +100,6 @@ function TicketCreatePage() {
       departmentId: validateRequired(formState.departmentId, 'Department'),
       locationId: validateRequired(formState.locationId, 'Location'),
       priority: validateRequired(formState.priority, 'Priority'),
-      requesterContact: validateRequired(formState.requesterContact, 'Requester Contact'),
       attachment: validateFile(formState.attachment, { allowedTypes: ALLOWED_ATTACHMENT_TYPES }),
     };
 
@@ -132,9 +129,7 @@ function TicketCreatePage() {
         ...formState,
         title: formState.title.trim(),
         description: formState.description.trim(),
-        assetName: formState.assetName.trim(),
-        assetId: formState.assetId.trim(),
-        requesterContact: formState.requesterContact.trim(),
+        telecomNumber: formState.telecomNumber.trim(),
         categoryId: formState.categoryId,
         subcategoryId: formState.subcategoryId,
         departmentId: formState.departmentId,
@@ -143,7 +138,7 @@ function TicketCreatePage() {
 
       const response = await createTicketRequest(payload);
       toast.success('Ticket created successfully.');
-      navigate(`/tickets/${response.data.id}`);
+      navigate(`/tickets/${response.data.ticketNumber}`);
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to create ticket.');
       setPageError(message);

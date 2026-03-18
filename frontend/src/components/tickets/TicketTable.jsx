@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import TicketStatusBadge from './TicketStatusBadge.jsx';
-import { formatDateTime } from '../../utils/ticketHelpers';
+import { getTimeTakenLabel } from '../../utils/ticketHelpers';
 
 function TicketTable({ tickets }) {
   return (
@@ -12,9 +12,8 @@ function TicketTable({ tickets }) {
               <th>Ticket</th>
               <th>Department</th>
               <th>Requester</th>
-              <th>Assigned To</th>
               <th>Status</th>
-              <th>Due At</th>
+              <th>Time Taken</th>
               <th className="text-end">Action</th>
             </tr>
           </thead>
@@ -27,16 +26,14 @@ function TicketTable({ tickets }) {
                 </td>
                 <td>{ticket.department?.name || 'Not available'}</td>
                 <td>{ticket.requester?.fullName || 'Not available'}</td>
-                <td>{ticket.assignedTo?.fullName || 'Unassigned'}</td>
                 <td>
                   <TicketStatusBadge status={ticket.status} priority={ticket.priority} />
                 </td>
                 <td>
-                  <div>{formatDateTime(ticket.dueAt)}</div>
-                  {ticket.isOverdue ? <span className="badge text-bg-danger mt-1">Overdue</span> : null}
+                  <div>{getTimeTakenLabel(ticket)}</div>
                 </td>
                 <td className="text-end">
-                  <Link to={`/tickets/${ticket.id}`} className="btn btn-sm btn-outline-primary">
+                  <Link to={`/tickets/${ticket.ticketNumber}`} className="btn btn-sm btn-outline-primary">
                     View
                   </Link>
                 </td>

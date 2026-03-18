@@ -11,7 +11,7 @@ const User = require('../../models/User.model');
 const Department = require('../../models/Department.model');
 
 const MIN_PASSWORD_LENGTH = 8;
-const ASSIGNABLE_ROLES = [Role.TECHNICIAN];
+const ASSIGNABLE_ROLES = [Role.HELPDESK];
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
 
