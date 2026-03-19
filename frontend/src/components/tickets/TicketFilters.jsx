@@ -73,15 +73,12 @@ function TicketFilters({
             </select>
           </div>
           <div className="col-6 col-xl-2">
-            <label className="form-label">Technician ID</label>
-            <input
-              type="text"
-              className="form-control"
-              name="assignedToId"
-              value={filters.assignedToId}
-              onChange={handleChange}
-              placeholder="Technician ObjectId"
-            />
+            <label className="form-label">Overdue</label>
+            <select className="form-select" name="isOverdue" value={filters.isOverdue} onChange={handleChange}>
+              <option value="">All</option>
+              <option value="true">Overdue</option>
+              <option value="false">Not overdue</option>
+            </select>
           </div>
           <div className="col-6 col-xl-2">
             <label className="form-label">From</label>

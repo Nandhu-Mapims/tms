@@ -72,8 +72,26 @@ export const formatDateTime = (value) => {
   }).format(new Date(value));
 };
 
-export const canResolveTicket = (role, ticket, userId) =>
-  ['ADMIN', 'HELPDESK', 'HOD'].includes(role) || ticket?.requesterId === userId;
+export const formatDurationFromMinutes = (minutes) => {
+  const totalMinutes = Number(minutes);
+  if (!Number.isFinite(totalMinutes) || totalMinutes <= 0) return 'Not available';
+
+  const MINUTES_PER_HOUR = 60;
+  const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
+
+  const days = Math.floor(totalMinutes / MINUTES_PER_DAY);
+  const hours = Math.floor((totalMinutes % MINUTES_PER_DAY) / MINUTES_PER_HOUR);
+  const mins = Math.floor(totalMinutes % MINUTES_PER_HOUR);
+
+  const parts = [];
+  if (days) parts.push(`${days}d`);
+  if (hours) parts.push(`${hours}h`);
+  if (mins || !parts.length) parts.push(`${mins}m`);
+
+  return `${totalMinutes} min (${parts.join(' ')})`;
+};
+
+export const canResolveTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
 export const canCloseTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
 export const canReopenTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);
 export const canEscalateTicket = (role) => ['ADMIN', 'HELPDESK', 'HOD'].includes(role);

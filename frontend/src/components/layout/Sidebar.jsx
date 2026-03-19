@@ -1,11 +1,25 @@
-﻿import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { APP_NAME, APP_SUBTITLE, NAV_ITEMS } from '../../config/appConfig';
 import { useAuth } from '../../hooks/useAuth';
 
 function Sidebar() {
   const { user } = useAuth();
+  const location = useLocation();
 
   const navigationItems = NAV_ITEMS.filter((item) => item.roles.includes(user?.role));
+  const pathname = location?.pathname ?? '';
+
+  const isNavItemActive = (item) => {
+    const path = String(item?.path ?? '');
+    if (!path) return false;
+
+    // Keep Tickets highlighted for list + details, but NOT for create page.
+    if (path === '/tickets') {
+      return pathname.startsWith('/tickets') && !pathname.startsWith('/tickets/create');
+    }
+
+    return pathname === path;
+  };
 
   return (
     <aside className="app-sidebar d-flex flex-column p-3 border-end bg-white">
@@ -25,8 +39,8 @@ function Sidebar() {
           <NavLink
             key={item.key}
             to={item.path}
-            className={({ isActive }) =>
-              `nav-link app-nav-link d-flex align-items-center justify-content-between ${isActive ? 'active' : ''}`
+            className={() =>
+              `nav-link app-nav-link d-flex align-items-center justify-content-between ${isNavItemActive(item) ? 'active' : ''}`
             }
           >
             <span className="d-flex align-items-center gap-2">

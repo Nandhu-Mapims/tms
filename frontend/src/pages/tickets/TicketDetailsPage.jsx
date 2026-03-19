@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
@@ -10,9 +10,11 @@ import TicketStatusBadge from '../../components/tickets/TicketStatusBadge.jsx';
 import { useAuth } from '../../hooks/useAuth';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useToast } from '../../hooks/useToast';
+import { getAssignableUsersRequest } from '../../services/authService';
 import {
   addTicketAttachmentRequest,
   addTicketCommentRequest,
+  claimTicketRequest,
   closeTicketRequest,
   escalateTicketRequest,
   getTicketActivityLogRequest,
@@ -21,6 +23,7 @@ import {
   getTicketCommentsRequest,
   reopenTicketRequest,
   resolveTicketRequest,
+  transferTicketRequest,
   updateTicketStatusRequest,
 } from '../../services/ticketService';
 import {
@@ -49,6 +52,16 @@ function TicketDetailsPage() {
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  const [transferState, setTransferState] = useState({
+    open: false,
+    isLoading: false,
+    errorMessage: '',
+    users: [],
+    assignedToId: '',
+    note: '',
+  });
 
   const loadTicketDetails = async (showLoader = true) => {
     if (showLoader) {
@@ -82,6 +95,30 @@ function TicketDetailsPage() {
   useEffect(() => {
     loadTicketDetails();
   }, [id]);
+
+  useEffect(() => {
+    if (!isMoreOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      const root = moreRef.current;
+      if (!root) return;
+      if (root.contains(event.target)) return;
+      setIsMoreOpen(false);
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsMoreOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMoreOpen]);
 
   useEffect(() => {
     if (!id) {
@@ -138,6 +175,52 @@ function TicketDetailsPage() {
     } finally {
       setIsActionLoading(false);
     }
+  };
+
+  const openTransferModal = async () => {
+    setIsMoreOpen(false);
+    setTransferState((prev) => ({ ...prev, open: true, isLoading: true, errorMessage: '' }));
+    try {
+      const response = await getAssignableUsersRequest();
+      const users = response?.data ?? [];
+      setTransferState((prev) => ({
+        ...prev,
+        isLoading: false,
+        users,
+        assignedToId: prev.assignedToId || '',
+      }));
+    } catch (error) {
+      setTransferState((prev) => ({
+        ...prev,
+        isLoading: false,
+        errorMessage: getErrorMessage(error, 'Unable to load helpdesk agents.'),
+      }));
+    }
+  };
+
+  const closeTransferModal = () => {
+    setTransferState((prev) => ({ ...prev, open: false, errorMessage: '' }));
+  };
+
+  const submitTransfer = async () => {
+    const assignedToId = String(transferState.assignedToId ?? '').trim();
+    if (!assignedToId) {
+      setTransferState((prev) => ({ ...prev, errorMessage: 'Select a helpdesk agent to transfer.' }));
+      return;
+    }
+
+    await executeAction({
+      action: () => transferTicketRequest(id, { assignedToId, note: transferState.note }),
+      successMessage: 'Ticket transferred successfully.',
+      confirmOptions: {
+        title: 'Transfer Ticket',
+        message: 'Transfer this ticket to the selected helpdesk agent?',
+        confirmText: 'Transfer',
+        variant: 'warning',
+      },
+    });
+
+    closeTransferModal();
   };
 
   const handleAddComment = async (payload) => {
@@ -206,12 +289,110 @@ function TicketDetailsPage() {
     </Link>,
   ];
 
-  if (user?.role !== 'REQUESTER') {
-    actions.push(
+  const isStaff = user?.role !== 'REQUESTER';
+  const canResolve = canResolveTicket(user?.role);
+  const canClose = canCloseTicket(user?.role);
+  const canReopen = canReopenTicket(user?.role);
+  const canEscalate = canEscalateTicket(user?.role);
+
+  const primaryActions = [];
+  const secondaryActions = [];
+
+  if (isStaff && !ticket?.assignedToId) {
+    primaryActions.push(
+      <button
+        key="claim"
+        type="button"
+        className="btn btn-primary"
+        disabled={isActionLoading}
+        onClick={() => executeAction({ action: () => claimTicketRequest(id), successMessage: 'Ticket assigned to you.' })}
+      >
+        Claim
+      </button>
+    );
+  }
+
+  if (canResolve && ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED' && ticket.status !== 'CANCELLED') {
+    primaryActions.push(
+      <button
+        key="resolve"
+        type="button"
+        className="btn btn-success"
+        disabled={isActionLoading}
+        onClick={() =>
+          executeAction({
+            action: () => resolveTicketRequest(id, { resolutionNote: 'Resolved from ticket detail page.' }),
+            successMessage: 'Ticket resolved successfully.',
+            confirmOptions: {
+              title: 'Resolve Ticket',
+              message: 'Mark this ticket as resolved now?',
+              confirmText: 'Resolve',
+              variant: 'primary',
+            },
+          })
+        }
+      >
+        Resolve
+      </button>
+    );
+  }
+
+  if (canClose) {
+    primaryActions.push(
+      <button
+        key="close"
+        type="button"
+        className="btn btn-outline-success"
+        disabled={isActionLoading || ticket.status !== 'RESOLVED'}
+        onClick={() =>
+          executeAction({
+            action: () => closeTicketRequest(id),
+            successMessage: 'Ticket closed successfully.',
+            confirmOptions: {
+              title: 'Close Ticket',
+              message: 'Close this resolved ticket? Further edits will require reopening.',
+              confirmText: 'Close Ticket',
+              variant: 'warning',
+            },
+          })
+        }
+      >
+        Close
+      </button>
+    );
+  }
+
+  if (canReopen) {
+    secondaryActions.push(
+      <button
+        key="reopen"
+        type="button"
+        className="dropdown-item"
+        disabled={isActionLoading || ticket.status !== 'CLOSED'}
+        onClick={() =>
+          executeAction({
+            action: () => reopenTicketRequest(id),
+            successMessage: 'Ticket reopened successfully.',
+            confirmOptions: {
+              title: 'Reopen Ticket',
+              message: 'Reopen this closed ticket and return it to active workflow?',
+              confirmText: 'Reopen',
+              variant: 'warning',
+            },
+          })
+        }
+      >
+        Reopen
+      </button>
+    );
+  }
+
+  if (isStaff) {
+    secondaryActions.push(
       <button
         key="open"
         type="button"
-        className="btn btn-outline-secondary"
+        className="dropdown-item"
         disabled={isActionLoading}
         onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'OPEN' }), successMessage: 'Ticket marked open.' })}
       >
@@ -219,11 +400,11 @@ function TicketDetailsPage() {
       </button>
     );
 
-    actions.push(
+    secondaryActions.push(
       <button
         key="inprogress"
         type="button"
-        className="btn btn-outline-secondary"
+        className="dropdown-item"
         disabled={isActionLoading}
         onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'IN_PROGRESS' }), successMessage: 'Ticket moved to in progress.' })}
       >
@@ -231,108 +412,87 @@ function TicketDetailsPage() {
       </button>
     );
 
-    actions.push(
+    secondaryActions.push(
       <button
         key="hold"
         type="button"
-        className="btn btn-outline-secondary"
+        className="dropdown-item"
         disabled={isActionLoading}
         onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'ON_HOLD' }), successMessage: 'Ticket placed on hold.' })}
       >
         Put On Hold
       </button>
     );
-  }
 
-  if (canResolveTicket(user?.role, ticket, user?.id)) {
-    actions.push(
+    secondaryActions.push(
       <button
-        key="resolve"
+        key="transfer"
         type="button"
-        className="btn btn-outline-success"
+        className="dropdown-item"
         disabled={isActionLoading}
-        onClick={() => executeAction({
-          action: () => resolveTicketRequest(id, { resolutionNote: 'Resolved from ticket detail page.' }),
-          successMessage: 'Ticket resolved successfully.',
-          confirmOptions: {
-            title: 'Resolve Ticket',
-            message: 'Mark this ticket as resolved now?',
-            confirmText: 'Resolve',
-            variant: 'primary',
-          },
-        })}
+        onClick={openTransferModal}
       >
-        Resolve
+        Transfer to agent
       </button>
     );
   }
 
-  if (canCloseTicket(user?.role)) {
-    actions.push(
-      <button
-        key="close"
-        type="button"
-        className="btn btn-success"
-        disabled={isActionLoading || ticket.status !== 'RESOLVED'}
-        onClick={() => executeAction({
-          action: () => closeTicketRequest(id),
-          successMessage: 'Ticket closed successfully.',
-          confirmOptions: {
-            title: 'Close Ticket',
-            message: 'Close this resolved ticket? Further edits will require reopening.',
-            confirmText: 'Close Ticket',
-            variant: 'warning',
-          },
-        })}
-      >
-        Close
-      </button>
-    );
-  }
-
-  if (canReopenTicket(user?.role)) {
-    actions.push(
-      <button
-        key="reopen"
-        type="button"
-        className="btn btn-warning"
-        disabled={isActionLoading || ticket.status !== 'CLOSED'}
-        onClick={() => executeAction({
-          action: () => reopenTicketRequest(id),
-          successMessage: 'Ticket reopened successfully.',
-          confirmOptions: {
-            title: 'Reopen Ticket',
-            message: 'Reopen this closed ticket and return it to active workflow?',
-            confirmText: 'Reopen',
-            variant: 'warning',
-          },
-        })}
-      >
-        Reopen
-      </button>
-    );
-  }
-
-  if (canEscalateTicket(user?.role)) {
-    actions.push(
+  if (canEscalate) {
+    secondaryActions.push(
       <button
         key="escalate"
         type="button"
-        className="btn btn-danger"
+        className="dropdown-item text-danger"
         disabled={isActionLoading || !ticket.isOverdue}
-        onClick={() => executeAction({
-          action: () => escalateTicketRequest(id, { remarks: 'Escalated from ticket detail page.' }),
-          successMessage: 'Ticket escalated successfully.',
-          confirmOptions: {
-            title: 'Escalate Ticket',
-            message: 'This ticket is overdue. Escalate it now?',
-            confirmText: 'Escalate',
-            variant: 'danger',
-          },
-        })}
+        onClick={() =>
+          executeAction({
+            action: () => escalateTicketRequest(id, { remarks: 'Escalated from ticket detail page.' }),
+            successMessage: 'Ticket escalated successfully.',
+            confirmOptions: {
+              title: 'Escalate Ticket',
+              message: 'This ticket is overdue. Escalate it now?',
+              confirmText: 'Escalate',
+              variant: 'danger',
+            },
+          })
+        }
       >
         Escalate
       </button>
+    );
+  }
+
+  actions.push(...primaryActions);
+
+  if (secondaryActions.length) {
+    const menu = (
+      <div className={`dropdown-menu dropdown-menu-end ${isMoreOpen ? 'show' : ''}`}>
+        {secondaryActions.map((node) => {
+          if (!isValidElement(node)) return node;
+          const originalOnClick = node.props?.onClick;
+          return cloneElement(node, {
+            onClick: async (...args) => {
+              setIsMoreOpen(false);
+              return originalOnClick?.(...args);
+            },
+          });
+        })}
+      </div>
+    );
+
+    actions.push(
+      <div key="more" className="dropdown" ref={moreRef}>
+        <button
+          type="button"
+          className="btn btn-outline-secondary dropdown-toggle"
+          aria-expanded={isMoreOpen}
+          disabled={isActionLoading}
+          onClick={() => setIsMoreOpen((prev) => !prev)}
+        >
+          More
+        </button>
+        {menu}
+      </div>
     );
   }
 
@@ -340,6 +500,61 @@ function TicketDetailsPage() {
     <>
       <PageHeader title={ticket.ticketNumber} subtitle={ticket.title} actions={actions} />
       {pageError ? <div className="alert alert-danger">{pageError}</div> : null}
+
+      {transferState.open ? (
+        <div className="modal fade show d-block modal-backdrop-soft" tabIndex="-1" role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content border-0 shadow">
+              <div className="modal-header">
+                <h2 className="modal-title fs-5">Transfer Ticket</h2>
+                <button type="button" className="btn-close" onClick={closeTransferModal}></button>
+              </div>
+              <div className="modal-body">
+                {transferState.errorMessage ? <div className="alert alert-danger">{transferState.errorMessage}</div> : null}
+                <div className="row g-3">
+                  <div className="col-12 col-md-7">
+                    <label className="form-label">
+                      Helpdesk agent <span className="text-danger ms-1">*</span>
+                    </label>
+                    <select
+                      className="form-select"
+                      value={transferState.assignedToId}
+                      disabled={transferState.isLoading}
+                      onChange={(e) => setTransferState((prev) => ({ ...prev, assignedToId: e.target.value, errorMessage: '' }))}
+                    >
+                      <option value="">{transferState.isLoading ? 'Loading agents...' : 'Select helpdesk agent'}</option>
+                      {transferState.users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.fullName} {u.email ? `(${u.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-12 col-md-5">
+                    <label className="form-label">Note (optional)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={transferState.note}
+                      onChange={(e) => setTransferState((prev) => ({ ...prev, note: e.target.value }))}
+                      placeholder="Reason for transfer"
+                      maxLength={200}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline-secondary" onClick={closeTransferModal} disabled={isActionLoading}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-primary" onClick={submitTransfer} disabled={isActionLoading || transferState.isLoading}>
+                  {isActionLoading ? 'Transferring...' : 'Transfer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="row g-4 mb-4">
         <div className="col-12 col-xl-8">
@@ -375,6 +590,10 @@ function TicketDetailsPage() {
                 <div className="col-md-6">
                   <span className="text-secondary d-block">Telecom Number</span>
                   <span className="fw-semibold">{ticket.telecomNumber || 'Not available'}</span>
+                </div>
+                <div className="col-md-6">
+                  <span className="text-secondary d-block">Handled By</span>
+                  <span className="fw-semibold">{ticket.assignedTo?.fullName || 'Unassigned'}</span>
                 </div>
                 <div className="col-md-6">
                   <span className="text-secondary d-block">Assigned Team</span>

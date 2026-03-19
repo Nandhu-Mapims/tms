@@ -12,6 +12,7 @@ function TicketTable({ tickets }) {
               <th>Ticket</th>
               <th>Department</th>
               <th>Requester</th>
+              <th>Handled By</th>
               <th>Status</th>
               <th>Time Taken</th>
               <th className="text-end">Action</th>
@@ -26,6 +27,7 @@ function TicketTable({ tickets }) {
                 </td>
                 <td>{ticket.department?.name || 'Not available'}</td>
                 <td>{ticket.requester?.fullName || 'Not available'}</td>
+                <td>{ticket.assignedTo?.fullName || 'Unassigned'}</td>
                 <td>
                   <TicketStatusBadge status={ticket.status} priority={ticket.priority} />
                 </td>

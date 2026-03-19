@@ -27,6 +27,14 @@ const FILE_ACCEPT = [
 function TicketAttachmentsSection({ attachments, onUpload, isUploading }) {
   const [file, setFile] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+
+  const buildPublicUrl = (filePath) => `${API_PUBLIC_BASE_URL}/${String(filePath ?? '').replace(/^\/+/, '')}`;
+
+  const canInlinePreview = (attachment) => {
+    const mime = String(attachment?.mimeType ?? '');
+    return mime.startsWith('image/') || mime === 'application/pdf' || mime === 'text/plain';
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -89,19 +97,89 @@ function TicketAttachmentsSection({ attachments, onUpload, isUploading }) {
                     Uploaded by {attachment.uploadedBy?.fullName || 'User'} | {formatDateTime(attachment.createdAt)}
                   </div>
                 </div>
-                <a
-                  href={`${API_PUBLIC_BASE_URL}/${attachment.filePath}`}
-                  className="btn btn-sm btn-outline-secondary"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open
-                </a>
+                <div className="d-flex flex-wrap gap-2 justify-content-end">
+                  {canInlinePreview(attachment) ? (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => setPreviewAttachment(attachment)}
+                    >
+                      Preview
+                    </button>
+                  ) : null}
+                  <a
+                    href={buildPublicUrl(attachment.filePath)}
+                    className="btn btn-sm btn-outline-secondary"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open
+                  </a>
+                </div>
               </div>
             </div>
           )) : <div className="border rounded-4 p-3 text-secondary small">No attachments uploaded yet.</div>}
         </div>
       </div>
+
+      {previewAttachment ? (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3 p-lg-5"
+          style={{ background: 'rgba(18, 30, 42, 0.55)', zIndex: 1090 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPreviewAttachment(null)}
+        >
+          <div
+            className="bg-white rounded-4 shadow-lg w-100"
+            style={{ maxWidth: 980, maxHeight: '92vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between gap-3 p-3 border-bottom">
+              <div className="fw-semibold text-truncate">{previewAttachment.originalName}</div>
+              <div className="d-flex align-items-center gap-2">
+                <a
+                  className="btn btn-sm btn-outline-secondary"
+                  href={buildPublicUrl(previewAttachment.filePath)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open in new tab
+                </a>
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => setPreviewAttachment(null)}>
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="p-3" style={{ overflow: 'auto', maxHeight: 'calc(92vh - 64px)' }}>
+              {String(previewAttachment?.mimeType ?? '').startsWith('image/') ? (
+                <img
+                  alt={previewAttachment.originalName ?? 'Attachment preview'}
+                  src={buildPublicUrl(previewAttachment.filePath)}
+                  className="img-fluid rounded-4 border"
+                  loading="lazy"
+                />
+              ) : String(previewAttachment?.mimeType ?? '') === 'application/pdf' ? (
+                <iframe
+                  title={previewAttachment.originalName ?? 'PDF preview'}
+                  src={buildPublicUrl(previewAttachment.filePath)}
+                  style={{ width: '100%', height: '70vh' }}
+                />
+              ) : String(previewAttachment?.mimeType ?? '') === 'text/plain' ? (
+                <iframe
+                  title={previewAttachment.originalName ?? 'Text preview'}
+                  src={buildPublicUrl(previewAttachment.filePath)}
+                  style={{ width: '100%', height: '70vh' }}
+                />
+              ) : (
+                <div className="text-secondary small">
+                  Preview is not available for this file type. Use “Open in new tab”.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

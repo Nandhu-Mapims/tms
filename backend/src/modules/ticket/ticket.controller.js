@@ -54,6 +54,26 @@ const updateStatus = asyncHandler(async (req, res) => {
   });
 });
 
+const claimTicket = asyncHandler(async (req, res) => {
+  const data = await ticketService.claimTicket(req.params.id, req.user);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    message: 'Ticket claimed successfully',
+    data,
+  });
+});
+
+const transferTicket = asyncHandler(async (req, res) => {
+  const data = await ticketService.transferTicket(req.params.id, req.body, req.user);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    message: 'Ticket transferred successfully',
+    data,
+  });
+});
+
 const resolveTicket = asyncHandler(async (req, res) => {
   const data = await ticketService.resolveTicket(req.params.id, req.body, req.user);
 
@@ -111,6 +131,8 @@ module.exports = {
   getTicketById,
   updateTicket,
   updateStatus,
+  claimTicket,
+  transferTicket,
   resolveTicket,
   closeTicket,
   reopenTicket,

@@ -13,6 +13,8 @@ router.use(protect);
 router.get('/escalations/pending', ticketController.getPendingEscalations);
 router.route('/').post(ticketController.createTicket).get(ticketController.getTickets);
 router.route('/:id').get(ticketController.getTicketById).patch(ticketController.updateTicket);
+router.patch('/:id/claim', ticketController.claimTicket);
+router.patch('/:id/transfer', ticketController.transferTicket);
 router.patch('/:id/status', ticketController.updateStatus);
 router.patch('/:id/resolve', ticketController.resolveTicket);
 router.patch('/:id/close', ticketController.closeTicket);

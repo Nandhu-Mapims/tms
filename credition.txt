@@ -4,8 +4,10 @@ HELPDESK	Helpdesk Agent One	EMP-HD-001	helpdesk1@tmshospital.com	Helpdesk@12345
 HELPDESK	Helpdesk Agent Two	EMP-HD-002	helpdesk2@tmshospital.com	Helpdesk@12345
 HOD	Dr. Cardiology HOD	EMP-HOD-001	hod.cardio@tmshospital.com	Hod@12345
 HOD	Dr. Radiology HOD	EMP-HOD-002	hod.radio@tmshospital.com	Hod@12345
-TECHNICIAN	Technician Ravi Kumar	EMP-TECH-001	tech1@tmshospital.com	Tech@12345
-TECHNICIAN	Technician Priya Sharma	EMP-TECH-002	tech2@tmshospital.com	Tech@12345
 REQUESTER	Nurse Anita Patel	EMP-REQ-001	anita.patel@tmshospital.com	User@12345
 REQUESTER	Dr. Arjun Mehta	EMP-REQ-002	arjun.mehta@tmshospital.com	User@12345
 REQUESTER	Pharmacist Sunita Rao	EMP-REQ-003	sunita.rao@tmshospital.com	User@12345
+
+Notes:
+- TECHNICIAN role removed (do not use old technician credentials)
+- Only REQUESTER can create tickets

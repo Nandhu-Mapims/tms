@@ -100,8 +100,8 @@ function UserManagementPage() {
       ]}
       fields={[
         { name: 'fullName', label: 'Full Name', required: true, colClass: 'col-md-6' },
-        { name: 'empId', label: 'Employee ID', required: true, colClass: 'col-md-3' },
-        { name: 'email', label: 'Email', type: 'email', colClass: 'col-md-3' },
+        { name: 'empId', label: 'Employee ID', required: true, colClass: 'col-md-6' },
+        { name: 'email', label: 'Email', type: 'email', colClass: 'col-md-6' },
         { name: 'phone', label: 'Phone', colClass: 'col-md-6' },
         {
           name: 'role',

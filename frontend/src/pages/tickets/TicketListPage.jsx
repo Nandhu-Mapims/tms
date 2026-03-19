@@ -12,13 +12,21 @@ import { getTicketsRequest } from '../../services/ticketService';
 import { useAuth } from '../../hooks/useAuth';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 
+const ROWS_PER_PAGE_OPTIONS = [
+  { value: 10, label: '10' },
+  { value: 25, label: '25' },
+  { value: 50, label: '50' },
+  { value: 100, label: '100' },
+  { value: 100, label: 'All (max 100)' },
+];
+
 const initialFilters = {
   search: '',
   status: '',
   priority: '',
   categoryId: '',
   departmentId: '',
-  assignedToId: '',
+  isOverdue: '',
   startDate: '',
   endDate: '',
   page: 1,
@@ -30,6 +38,7 @@ function TicketListPage() {
   const { user } = useAuth();
   const [filters, setFilters] = useState(initialFilters);
   const [draftFilters, setDraftFilters] = useState(initialFilters);
+  const [isHandledByMeOnly, setIsHandledByMeOnly] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [meta, setMeta] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,7 +69,11 @@ function TicketListPage() {
       setPageError('');
 
       try {
-        const response = await getTicketsRequest(filters);
+        const userId = String(user?.id ?? '');
+        const effectiveFilters = isHandledByMeOnly && userId
+          ? { ...filters, assignedToId: userId }
+          : filters;
+        const response = await getTicketsRequest(effectiveFilters);
         setTickets(response.data);
         setMeta(response.meta);
       } catch (error) {
@@ -73,7 +86,7 @@ function TicketListPage() {
     };
 
     loadTickets();
-  }, [filters, toast]);
+  }, [filters, isHandledByMeOnly, toast, user?.id]);
 
   const handleDraftChange = (name, value) => {
     setDraftFilters((prev) => ({ ...prev, [name]: value }));
@@ -86,12 +99,31 @@ function TicketListPage() {
   const handleResetFilters = () => {
     setDraftFilters(initialFilters);
     setFilters(initialFilters);
+    setIsHandledByMeOnly(false);
   };
 
   const actions = user?.role === 'REQUESTER'
     ? [<Link key="create" to="/tickets/create" className="btn btn-primary">Create Ticket</Link>]
     : [];
-  const activeFilterCount = ['search', 'status', 'priority', 'categoryId', 'departmentId', 'assignedToId', 'startDate', 'endDate']
+
+  if (user?.role && user.role !== 'REQUESTER') {
+    actions.push(
+      <button
+        key="handledByMe"
+        type="button"
+        className={`btn ${isHandledByMeOnly ? 'btn-primary' : 'btn-outline-primary'}`}
+        onClick={() => {
+          const userId = String(user?.id ?? '');
+          if (!userId) return;
+          setIsHandledByMeOnly((prev) => !prev);
+          setFilters((prev) => ({ ...prev, page: 1 }));
+        }}
+      >
+        Handled by me
+      </button>
+    );
+  }
+  const activeFilterCount = ['search', 'status', 'priority', 'categoryId', 'departmentId', 'isOverdue', 'startDate', 'endDate']
     .filter((key) => Boolean(filters[key])).length;
 
   return (
@@ -109,7 +141,29 @@ function TicketListPage() {
 
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3 small text-secondary">
         <div>{activeFilterCount ? `${activeFilterCount} filter(s) applied` : 'No additional filters applied'}</div>
-        {meta ? <div>{meta.total} ticket(s) found</div> : null}
+        <div className="d-flex flex-wrap align-items-center gap-3 justify-content-end">
+          {meta ? <div>{meta.total} ticket(s) found</div> : null}
+          <div className="d-inline-flex align-items-center gap-2">
+            <span>Rows</span>
+            <select
+              className="form-select form-select-sm"
+              style={{ width: 140 }}
+              value={filters.limit}
+              onChange={(e) => {
+                const nextLimit = Number(e.target.value);
+                const limit = Number.isFinite(nextLimit) && nextLimit > 0 ? nextLimit : initialFilters.limit;
+                setFilters((prev) => ({ ...prev, limit, page: 1 }));
+                setDraftFilters((prev) => ({ ...prev, limit, page: 1 }));
+              }}
+            >
+              {ROWS_PER_PAGE_OPTIONS.map((opt, idx) => (
+                <option key={`${opt.value}-${idx}`} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {isLoading ? (

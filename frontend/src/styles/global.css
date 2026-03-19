@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   color-scheme: light;
   --app-bg: #f3f7fb;
   --shell-border: #d7e2ec;
@@ -7,6 +7,12 @@
   --brand-blue-soft: rgba(13, 110, 253, 0.12);
   --text-muted: #637487;
   --surface: #ffffff;
+  --surface-muted: #f7fbff;
+  --radius-lg: 22px;
+  --radius-md: 16px;
+  --shadow-sm: 0 8px 20px rgba(15, 33, 55, 0.08);
+  --shadow-md: 0 14px 34px rgba(15, 33, 55, 0.12);
+  --content-max-width: 1400px;
 }
 
 body {
@@ -18,6 +24,12 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+.app-page {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
 }
 
 .bg-app-shell {
@@ -44,15 +56,20 @@ body {
 }
 
 .app-shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  display: block;
   background: var(--app-bg);
 }
 
 .app-sidebar {
-  min-height: 100vh;
-  position: sticky;
+  position: fixed;
+  left: 0;
   top: 0;
+  bottom: 0;
+  width: var(--sidebar-width);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(10px);
 }
 
 .sidebar-logo {
@@ -85,16 +102,59 @@ body {
 
 .app-content-wrapper {
   min-width: 0;
+  margin-left: var(--sidebar-width);
 }
 
 .top-navbar {
   position: sticky;
   top: 0;
   z-index: 10;
+  background: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(10px);
 }
 
 .app-content {
   background: transparent;
+}
+
+.card {
+  border-radius: var(--radius-lg);
+  border-color: #e3edf6;
+  box-shadow: var(--shadow-sm);
+}
+
+.card .card-header {
+  background: transparent;
+  border-bottom-color: #e8f1f8;
+}
+
+.btn {
+  border-radius: 14px;
+}
+
+.form-control,
+.form-select {
+  border-radius: 14px;
+  border-color: #d9e6f2;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: rgba(13, 110, 253, 0.6);
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.12);
+}
+
+.table {
+  --bs-table-bg: transparent;
+}
+
+.table thead th {
+  color: #41586c;
+  font-weight: 600;
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: rgba(13, 110, 253, 0.04);
 }
 
 .hero-card {
@@ -193,13 +253,22 @@ body {
 
 @media (max-width: 991.98px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    display: block;
   }
 
   .app-sidebar {
     min-height: auto;
     position: relative;
+    width: auto;
+    left: auto;
+    top: auto;
+    bottom: auto;
+    overflow: visible;
     border-bottom: 1px solid var(--shell-border);
+  }
+
+  .app-content-wrapper {
+    margin-left: 0;
   }
 
   .app-nav-scroll {

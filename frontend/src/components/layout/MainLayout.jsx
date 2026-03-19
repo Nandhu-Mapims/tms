@@ -9,7 +9,9 @@ function MainLayout() {
       <div className="app-content-wrapper">
         <TopNavbar />
         <main className="app-content p-4 p-lg-5">
-          <Outlet />
+          <div className="app-page">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

@@ -1,4 +1,4 @@
-﻿import { ROLE_LABELS } from '../../config/appConfig';
+import { APP_NAME, ROLE_LABELS } from '../../config/appConfig';
 import { useAuth } from '../../hooks/useAuth';
 
 function TopNavbar() {
@@ -7,7 +7,7 @@ function TopNavbar() {
   return (
     <header className="top-navbar bg-white border-bottom px-4 py-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
       <div>
-        <h2 className="h5 mb-1 fw-semibold text-dark">Hospital Operations Console</h2>
+        <h2 className="h5 mb-1 fw-semibold text-dark">{APP_NAME} Operations Console</h2>
         <p className="text-secondary small mb-0">Monitor service requests, triage workload, and support clinical operations.</p>
       </div>
 

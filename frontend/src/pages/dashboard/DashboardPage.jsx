@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { getDashboardSummary } from '../../services/dashboardService';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
+import HodDashboard from '../../components/dashboard/HodDashboard.jsx';
 
 const SUMMARY_CARDS = [
   { key: 'totalTickets', label: 'Total Tickets', icon: 'bi-file-earmark-text' },
@@ -21,6 +22,10 @@ function DashboardPage() {
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+
+  if (user?.role === 'HOD') {
+    return <HodDashboard user={user} />;
+  }
 
   useEffect(() => {
     const loadSummary = async () => {

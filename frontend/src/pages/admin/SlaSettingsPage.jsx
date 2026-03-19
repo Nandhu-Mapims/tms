@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import EntityManagementPage from '../../components/admin/EntityManagementPage.jsx';
 import { createSlaConfig, deleteSlaConfig, getSlaConfigs, updateSlaConfig } from '../../services/masterDataService';
 import { useAuth } from '../../hooks/useAuth';
+import { formatDurationFromMinutes } from '../../utils/ticketHelpers';
 
 function SlaSettingsPage() {
   const { user } = useAuth();
@@ -67,9 +68,9 @@ function SlaSettingsPage() {
       items={items}
       columns={[
         { key: 'priority', label: 'Priority' },
-        { key: 'firstResponseMinutes', label: 'First Response (mins)' },
-        { key: 'resolutionMinutes', label: 'Resolution (mins)' },
-        { key: 'escalationMinutes', label: 'Escalation (mins)' },
+        { key: 'firstResponseMinutes', label: 'First Response', render: (item) => formatDurationFromMinutes(item.firstResponseMinutes) },
+        { key: 'resolutionMinutes', label: 'Resolution', render: (item) => formatDurationFromMinutes(item.resolutionMinutes) },
+        { key: 'escalationMinutes', label: 'Escalation', render: (item) => formatDurationFromMinutes(item.escalationMinutes) },
       ]}
       fields={[
         {
@@ -80,9 +81,9 @@ function SlaSettingsPage() {
           options: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((value) => ({ value, label: value })),
           colClass: 'col-md-6',
         },
-        { name: 'firstResponseMinutes', label: 'First Response Minutes', type: 'number', min: 1, required: true, colClass: 'col-md-6' },
-        { name: 'resolutionMinutes', label: 'Resolution Minutes', type: 'number', min: 1, required: true, colClass: 'col-md-6' },
-        { name: 'escalationMinutes', label: 'Escalation Minutes', type: 'number', min: 1, required: true, colClass: 'col-md-6' },
+        { name: 'firstResponseMinutes', label: 'First Response', type: 'duration', min: 1, required: true, colClass: 'col-md-6' },
+        { name: 'resolutionMinutes', label: 'Resolution', type: 'duration', min: 1, required: true, colClass: 'col-md-6' },
+        { name: 'escalationMinutes', label: 'Escalation', type: 'duration', min: 1, required: true, colClass: 'col-md-6' },
         { name: 'isActive', label: 'Active', type: 'checkbox', colClass: 'col-12' },
       ]}
       searchValue={search}

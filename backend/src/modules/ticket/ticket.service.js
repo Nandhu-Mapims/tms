@@ -17,6 +17,7 @@ const User = require('../../models/User.model');
 const Ticket = require('../../models/Ticket.model');
 
 const ASSIGNABLE_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD];
+const TRANSFER_TARGET_ROLES = [Role.HELPDESK];
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
 
@@ -38,6 +39,24 @@ const validateStatus = (status) => {
   if (!Object.values(TicketStatus).includes(status)) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid ticket status supplied');
   }
+};
+
+const normalizeStatus = (status) => String(status ?? '').trim();
+
+const parseBooleanFilter = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+  throw new ApiError(StatusCodes.BAD_REQUEST, 'isOverdue must be a valid boolean');
+};
+
+const ensureUnassignedOrSameUser = (user, ticket) => {
+  const currentAssigneeId = ticket?.assignedToId?.toString?.() ?? '';
+  if (!currentAssigneeId) return;
+  const userId = String(user?.id ?? '');
+  if (currentAssigneeId === userId) return;
+  throw new ApiError(StatusCodes.CONFLICT, 'Ticket is already assigned to another staff member');
 };
 
 const ensureStaffAccess = (user) => {
@@ -98,6 +117,7 @@ const shapeTicket = (ticket) => {
   return {
     ...t,
     id: t?._id?.toString?.() ?? t?.id,
+    status: normalizeStatus(t?.status),
     department: t?.departmentId ?? null,
     category: t?.categoryId ?? null,
     subcategory: t?.subcategoryId ?? null,
@@ -208,6 +228,11 @@ const getTickets = async (query, user) => {
     where.assignedToId = toObjectId(query.assignedToId, 'assignedToId');
   }
 
+  const isOverdue = parseBooleanFilter(query?.isOverdue);
+  if (isOverdue !== null) {
+    where.isOverdue = isOverdue;
+  }
+
   if (query?.startDate || query?.endDate) {
     const createdAt = {};
     if (query.startDate) {
@@ -225,8 +250,9 @@ const getTickets = async (query, user) => {
   }
 
   if (query?.status) {
-    validateStatus(query.status);
-    where.status = query.status;
+    const nextStatus = normalizeStatus(query.status);
+    validateStatus(nextStatus);
+    where.status = nextStatus;
   }
   if (query?.priority) {
     validatePriority(query.priority);
@@ -244,7 +270,7 @@ const getTickets = async (query, user) => {
 
   return {
     items: items.map(shapeTicket),
-    meta: { page, limit, total, count: items.length },
+    meta: { page, limit, total, count: items.length, totalPages: Math.max(1, Math.ceil(total / limit)) },
   };
 };
 
@@ -274,15 +300,22 @@ const updateTicket = async (id, payload, user) => {
 };
 
 const updateStatus = async (id, payload, user) => {
-  const status = payload?.status;
+  const status = normalizeStatus(payload?.status);
   validateStatus(status);
 
   const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
   ensureAssigneeOrStaff(user, ticket);
+  ensureUnassignedOrSameUser(user, ticket);
 
   const oldStatus = ticket.status;
   ticket.status = status;
+  if (status === TicketStatus.ASSIGNED && !ticket.assignedToId) {
+    ticket.assignedToId = toObjectId(user.id, 'userId');
+  }
+  if (status === TicketStatus.IN_PROGRESS && !ticket.assignedToId) {
+    ticket.assignedToId = toObjectId(user.id, 'userId');
+  }
   await ticket.save();
 
   await createActivityLog(null, {
@@ -292,6 +325,73 @@ const updateStatus = async (id, payload, user) => {
     oldValue: oldStatus,
     newValue: status,
     remarks: 'Ticket status updated',
+  });
+
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
+};
+
+const claimTicket = async (id, user) => {
+  ensureStaffAccess(user);
+  const ticket = await getTicketDocOrThrow(id);
+  ensureCanViewTicket(user, ticket);
+
+  ensureUnassignedOrSameUser(user, ticket);
+
+  const oldStatus = ticket.status;
+  ticket.assignedToId = toObjectId(user.id, 'userId');
+  if ([TicketStatus.NEW, TicketStatus.OPEN].includes(ticket.status)) {
+    ticket.status = TicketStatus.ASSIGNED;
+  }
+  await ticket.save();
+
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'ASSIGNED',
+    oldValue: oldStatus,
+    newValue: ticket.status,
+    remarks: 'Ticket claimed by staff',
+  });
+
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
+};
+
+const transferTicket = async (id, payload, user) => {
+  ensureStaffAccess(user);
+
+  const nextAssignedToIdRaw = payload?.assignedToId;
+  const note = payload?.note ? String(payload.note) : '';
+  const trimmedNote = note.trim();
+
+  const nextAssignedToId = toObjectId(nextAssignedToIdRaw, 'assignedToId');
+
+  const assignee = await User.findOne({ _id: nextAssignedToId, isActive: true, role: { $in: TRANSFER_TARGET_ROLES } })
+    .select('_id fullName role')
+    .lean();
+
+  if (!assignee) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected assignee is not available for transfer');
+  }
+
+  const ticket = await getTicketDocOrThrow(id);
+  ensureCanViewTicket(user, ticket);
+
+  const oldAssigneeId = ticket.assignedToId?.toString?.() ?? null;
+  ticket.assignedToId = assignee._id;
+  if ([TicketStatus.NEW, TicketStatus.OPEN].includes(ticket.status)) {
+    ticket.status = TicketStatus.ASSIGNED;
+  }
+  await ticket.save();
+
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'TRANSFERRED',
+    oldValue: oldAssigneeId,
+    newValue: assignee._id.toString(),
+    remarks: trimmedNote ? `Transferred to ${assignee.fullName}. ${trimmedNote}` : `Transferred to ${assignee.fullName}`,
   });
 
   const full = await populateTicket(Ticket.findById(ticket._id)).lean();
@@ -370,7 +470,10 @@ const getPendingEscalations = async (query, user) => {
     populateTicket(Ticket.find(where).sort({ createdAt: -1 }).skip(skip).limit(limit)).lean(),
     Ticket.countDocuments(where),
   ]);
-  return { items: items.map(shapeTicket), meta: { page, limit, total, count: items.length } };
+  return {
+    items: items.map(shapeTicket),
+    meta: { page, limit, total, count: items.length, totalPages: Math.max(1, Math.ceil(total / limit)) },
+  };
 };
 
 module.exports = {
@@ -379,6 +482,8 @@ module.exports = {
   getTicketById,
   updateTicket,
   updateStatus,
+  claimTicket,
+  transferTicket,
   resolveTicket,
   closeTicket,
   reopenTicket,

@@ -30,7 +30,17 @@ export const createTicketRequest = async (payload) => {
   const formData = new FormData();
   formData.append('attachment', attachment);
 
-  await apiClient.post(`/tickets/${ticketResponse.data.id}/attachments`, formData, {
+  const ticketId =
+    ticketResponse?.data?.data?.id ??
+    ticketResponse?.data?.id ??
+    ticketResponse?.data?.data?._id ??
+    ticketResponse?.data?._id;
+
+  if (!ticketId) {
+    throw new Error('Unable to upload attachment: created ticket id is missing');
+  }
+
+  await apiClient.post(`/tickets/${ticketId}/attachments`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -46,6 +56,16 @@ export const updateTicketRequest = async (id, payload) => {
 
 export const updateTicketStatusRequest = async (id, payload) => {
   const response = await apiClient.patch(`/tickets/${id}/status`, payload, jsonConfig);
+  return response.data;
+};
+
+export const claimTicketRequest = async (id) => {
+  const response = await apiClient.patch(`/tickets/${id}/claim`, {}, jsonConfig);
+  return response.data;
+};
+
+export const transferTicketRequest = async (id, payload) => {
+  const response = await apiClient.patch(`/tickets/${id}/transfer`, payload, jsonConfig);
   return response.data;
 };
 

@@ -138,7 +138,19 @@ function TicketCreatePage() {
 
       const response = await createTicketRequest(payload);
       toast.success('Ticket created successfully.');
-      navigate(`/tickets/${response.data.ticketNumber}`);
+      const ticketNumber =
+        response?.data?.ticketNumber ??
+        response?.data?.data?.ticketNumber ??
+        response?.ticketNumber ??
+        '';
+
+      if (!ticketNumber) {
+        setPageError('Ticket was created but ticket navigation failed.');
+        toast.error('Ticket was created, but we could not open it automatically.');
+        return;
+      }
+
+      navigate(`/tickets/${ticketNumber}`);
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to create ticket.');
       setPageError(message);

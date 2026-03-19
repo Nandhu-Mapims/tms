@@ -1,4 +1,4 @@
-export const APP_NAME = 'TMS Hospital';
+export const APP_NAME = 'MAPIMS';
 export const APP_SUBTITLE = 'Hospital Ticket Management System';
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 export const API_PUBLIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');

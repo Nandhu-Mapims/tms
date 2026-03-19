@@ -1,5 +1,5 @@
-﻿function PaginationControls({ meta, onPageChange }) {
-  if (!meta || meta.totalPages <= 1) {
+function PaginationControls({ meta, onPageChange }) {
+  if (!meta) {
     return null;
   }
 

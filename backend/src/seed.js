@@ -459,15 +459,15 @@ const seed = async () => {
       });
     }
 
-    // Activity log — assigned
+    // Activity log — assigned/claimed
     if (assignee) {
       await TicketActivityLog.create({
         ticketId: ticket._id,
-        actorId: helpdesks[0]._id,
+        actorId: assignee._id,
         action: 'ASSIGNED',
         fromValue: TicketStatus.OPEN,
-        toValue: def.status,
-        note: `Assigned to ${assignee.fullName}`,
+        toValue: ticket.status,
+        note: `Claimed by ${assignee.fullName}`,
         createdAt: new Date(createdAt.getTime() + 1800000),
       });
     }
