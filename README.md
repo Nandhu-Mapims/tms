@@ -1,4 +1,4 @@
-# Hospital Ticket Management System (TMS)
+# MAPIMS — Ticket Management System
 
 A full-stack, role-based **Ticket Management System** purpose-built for hospitals. It manages the entire lifecycle of internal support/maintenance requests — from submission through assignment, resolution, and reporting — with SLA tracking, file attachments, activity auditing, and a rich analytics dashboard.
 
@@ -22,8 +22,7 @@ A full-stack, role-based **Ticket Management System** purpose-built for hospital
   - [3. Frontend Setup](#3-frontend-setup)
 - [Environment Variables](#environment-variables)
 - [Running the Application](#running-the-application)
-- [Default Admin Credentials](#default-admin-credentials)
-- [Prisma Commands](#prisma-commands)
+- [Seed & Default Credentials](#seed--default-credentials)
 - [File Uploads](#file-uploads)
 - [Dashboard & Reports](#dashboard--reports)
 - [Project Conventions](#project-conventions)
@@ -34,21 +33,22 @@ A full-stack, role-based **Ticket Management System** purpose-built for hospital
 
 ### Core Ticket Management
 - Create, view, update, and track support tickets with rich metadata
-- Auto-generated ticket numbers in the format `{CATEGORY_CODE}-{YEAR}-{SEQUENCE}` (collision-safe, Serializable transactions)
-- Full ticket lifecycle state machine with valid transitions enforced server-side
+- Stable, human-friendly **ticket numbers** in the format `TKT-{CATEGORY_CODE}-{YEAR}-{SEQUENCE}`
+- Full ticket lifecycle with server-side validation
 - Role-scoped ticket visibility (Requesters see only their own; staff see all)
-- Assign/reassign tickets to individual technicians or teams
-- Internal and external comments per ticket
-- File attachments (images, PDFs, documents) per ticket with secure filename storage
+- **Claim / Assign** workflow to avoid duplicate handling across Helpdesk agents
+- **Transfer to agent** (reassign `Handled By` to another helpdesk agent with audit log)
+- Internal and external comments per ticket (Chat UI)
+- File attachments (type allowlist + 10MB limit) with secure filename storage and in-app preview (where supported)
 
 ### SLA Tracking
 - Configurable SLA policies per priority (LOW / MEDIUM / HIGH / CRITICAL)
 - Three SLA timers: First Response, Resolution, and Escalation deadlines
-- `isOverdue` flag evaluated on every ticket fetch/list
+- `isOverdue` flag + ticket list filter (All / Overdue / Not overdue)
 - Pending escalations endpoint for proactive SLA management
 
 ### Role-Based Access Control
-- Five distinct roles with granular permission checks at route and service level
+- Roles with granular permission checks at route and service level
 - Admin-only user management (create, update, toggle active/inactive)
 - HOD/Helpdesk/Admin can escalate, reopen, and close tickets
 - Requesters are blocked from all administrative and assignment operations
@@ -80,8 +80,8 @@ A full-stack, role-based **Ticket Management System** purpose-built for hospital
 |---|---|---|
 | Backend Runtime | Node.js (CommonJS) | 18+ |
 | Backend Framework | Express | 4.x |
-| ORM | Prisma | 6.x |
-| Database | MySQL | 8.x |
+| ODM | Mongoose | 8.x |
+| Database | MongoDB | 6+ |
 | Authentication | JWT (`jsonwebtoken`) + bcryptjs | — |
 | File Uploads | Multer (disk storage) | — |
 | HTTP Logging | Morgan | — |
@@ -116,12 +116,12 @@ A full-stack, role-based **Ticket Management System** purpose-built for hospital
 │    auth │ user │ department │ category │ subcategory          │
 │    location │ slaConfig │ ticket │ dashboard │ report         │
 │                                                               │
-│  Each module: routes → controller → service → Prisma Client  │
+│  Each module: routes → controller → service → Mongoose Models │
 └──────────────────────────┬──────────────────────────────────-┘
-                           │ Prisma ORM
+                           │ Mongoose ODM
                            ▼
                     ┌──────────────┐
-                    │  MySQL 8.x   │
+                    │   MongoDB    │
                     └──────────────┘
 ```
 
@@ -136,23 +136,19 @@ A full-stack, role-based **Ticket Management System** purpose-built for hospital
 ## Project Structure
 
 ```
-TMS_Hospital/
+MAPIMS/
 ├── README.md
 │
 ├── backend/
 │   ├── package.json
 │   ├── .env.example
 │   ├── .gitignore
-│   ├── prisma/
-│   │   ├── schema.prisma              ← Full database schema (Prisma ORM)
-│   │   ├── seed.js                    ← Admin user seeder
-│   │   └── migrations/                ← Auto-generated SQL migrations
 │   └── src/
 │       ├── server.js                  ← HTTP server entry point
 │       ├── app.js                     ← Express app + middleware assembly
 │       ├── config/
 │       │   ├── env.js                 ← Env var validation (fails fast on missing keys)
-│       │   ├── database.js            ← Prisma client singleton + connectDatabase()
+│       │   ├── database.js            ← Mongoose connect/disconnect
 │       │   └── index.js               ← Config barrel export
 │       ├── middlewares/
 │       │   ├── auth.middleware.js     ← protect + authorizeRoles
@@ -195,9 +191,6 @@ TMS_Hospital/
 │           ├── sanitizeUser.js
 │           ├── parsePagination.js
 │           ├── parsePositiveInt.js
-│           ├── parseBoolean.js
-│           ├── ticketNumberGenerator.js
-│           ├── masterServiceFactory.js
 │           ├── createMasterController.js
 │           └── createMasterRouter.js
 │
@@ -272,29 +265,29 @@ TMS_Hospital/
 
 ## User Roles & Permissions
 
-| Action | ADMIN | HELPDESK | TECHNICIAN | HOD | REQUESTER |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Create ticket | ✓ | ✓ | ✓ | ✓ | ✓ |
-| View all tickets | ✓ | ✓ | ✓* | ✓ | — |
-| View own tickets | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Assign / reassign ticket | ✓ | ✓ | — | ✓ | — |
-| Update ticket status | ✓ | ✓ | ✓ | ✓ | — |
-| Resolve ticket | ✓ | ✓ | ✓ | ✓ | — |
-| Close ticket | ✓ | ✓ | — | ✓ | — |
-| Reopen ticket | ✓ | ✓ | — | ✓ | — |
-| Escalate ticket | ✓ | ✓ | — | ✓ | — |
-| Add public comment | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Add internal comment | ✓ | ✓ | ✓ | ✓ | — |
-| Upload attachment | ✓ | ✓ | ✓ | ✓ | ✓ |
-| View dashboard | ✓ | ✓ | ✓ | ✓ | ✓† |
-| View technician performance | ✓ | ✓ | — | ✓ | — |
-| View reports | ✓ | ✓ | ✓ | ✓ | — |
-| Manage users | ✓ | — | — | — | — |
-| Manage master data | ✓ | ✓ | — | ✓ | — |
-| Manage SLA configs | ✓ | ✓ | — | ✓ | — |
+| Action | ADMIN | HELPDESK | HOD | REQUESTER |
+|---|:---:|:---:|:---:|:---:|
+| Create ticket | — | — | — | ✓ |
+| View all tickets | ✓ | ✓ | ✓ | — |
+| View own tickets | ✓ | ✓ | ✓ | ✓ |
+| Claim / handle ticket | ✓ | ✓ | ✓ | — |
+| Transfer to another agent | ✓ | ✓ | ✓ | — |
+| Update ticket status | ✓ | ✓ | ✓ | — |
+| Resolve ticket | ✓ | ✓ | ✓ | — |
+| Close ticket | ✓ | ✓ | ✓ | — |
+| Reopen ticket | ✓ | ✓ | ✓ | — |
+| Escalate ticket | ✓ | ✓ | ✓ | — |
+| Add public comment (Chat) | ✓ | ✓ | ✓ | ✓ |
+| Add internal comment | ✓ | ✓ | ✓ | — |
+| Upload attachment | ✓ | ✓ | ✓ | ✓ |
+| View dashboard | ✓ | ✓ | ✓ | ✓* |
+| View helpdesk workload | ✓ | ✓ | ✓ | — |
+| View reports | ✓ | ✓ | ✓ | — |
+| Manage users | ✓ | — | — | — |
+| Manage master data | ✓ | ✓ | ✓ | — |
+| Manage SLA configs | ✓ | — | — | — |
 
-> \* Technicians see all tickets but their assignment actions are limited.  
-> † Requesters see a scoped dashboard limited to their own tickets.
+> \* Requesters see a scoped dashboard limited to their own tickets.
 
 ---
 
@@ -348,7 +341,7 @@ SLA policies are configured per priority level in the Admin panel under **SLA Se
 ### Enums
 
 ```
-Role:         ADMIN | HELPDESK | TECHNICIAN | HOD | REQUESTER
+Role:         ADMIN | HELPDESK | HOD | REQUESTER
 Priority:     LOW | MEDIUM | HIGH | CRITICAL
 TicketStatus: NEW | OPEN | ASSIGNED | IN_PROGRESS | ON_HOLD |
               ESCALATED | RESOLVED | CLOSED | REOPENED | CANCELLED
@@ -459,7 +452,8 @@ Resources: `departments`, `categories`, `subcategories`, `locations`, `sla-confi
 | POST | `/tickets` | All | Create new ticket |
 | GET | `/tickets/:id` | All | Get ticket details |
 | PATCH | `/tickets/:id` | Staff | Update ticket fields |
-| PATCH | `/tickets/:id/assign` | Staff | Assign/reassign ticket |
+| PATCH | `/tickets/:id/claim` | Staff | Claim/assign ticket to self |
+| PATCH | `/tickets/:id/transfer` | Staff | Transfer ticket to another helpdesk agent |
 | PATCH | `/tickets/:id/status` | Staff | Change ticket status |
 | PATCH | `/tickets/:id/resolve` | Staff | Mark as resolved |
 | PATCH | `/tickets/:id/close` | ADMIN/HELPDESK/HOD | Close resolved ticket |
@@ -486,7 +480,7 @@ Resources: `departments`, `categories`, `subcategories`, `locations`, `sla-confi
 | GET | `/dashboard/department-wise` | Tickets grouped by department |
 | GET | `/dashboard/priority-wise` | Tickets grouped by priority |
 | GET | `/dashboard/status-wise` | Tickets grouped by status |
-| GET | `/dashboard/technician-performance` | Assigned vs resolved per technician |
+| GET | `/dashboard/technician-performance` | Helpdesk workload (assigned vs resolved per agent) |
 | GET | `/dashboard/monthly-trend` | Monthly ticket volume (default: 6 months, max: 24) |
 
 ### Reports (Protected)
@@ -514,8 +508,7 @@ Resources: `departments`, `categories`, `subcategories`, `locations`, `sla-confi
 
 - **Node.js** 18 or higher
 - **npm** 9 or higher
-- **MySQL** 8.x running locally or remotely
-- A MySQL client (MySQL Workbench, DBeaver, or CLI)
+- **MongoDB** running locally (or via Docker)
 
 ---
 
@@ -523,51 +516,57 @@ Resources: `departments`, `categories`, `subcategories`, `locations`, `sla-confi
 
 ### 1. Database Setup
 
-Start your MySQL server and create a database:
+You can run MongoDB either directly or via Docker Compose.
 
-```sql
-CREATE DATABASE tms_hospital CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+**Option A — Docker Compose (recommended):**
+
+```bash
+docker compose up -d
 ```
+
+**Option B — Local MongoDB:**
+
+- Ensure MongoDB is running and reachable at your `MONGODB_URI`
 
 ---
 
 ### 2. Backend Setup
 
-```powershell
-cd D:\TMS_Hospital\backend
+```bash
+cd backend
 
 # Install dependencies
 npm install
 
 # Copy and configure environment file
-copy .env.example .env
+cp .env.example .env
 ```
 
 Edit `backend/.env` with your values (see [Environment Variables](#environment-variables) below).
 
-```powershell
-# Generate Prisma client
-npx prisma generate
-
-# Apply database migrations
-npx prisma migrate dev --name init
-
-# Seed the default admin user
+```bash
+# Seed demo data (users, master data, tickets)
 npm run seed
+
+# Start backend
+npm run dev
 ```
 
 ---
 
 ### 3. Frontend Setup
 
-```powershell
-cd D:\TMS_Hospital\frontend
+```bash
+cd frontend
 
 # Install dependencies
 npm install
 
 # Copy and configure environment file
-copy .env.example .env
+cp .env.example .env
+
+# Start frontend
+npm run dev
 ```
 
 Edit `frontend/.env` — set `VITE_API_BASE_URL` to your backend URL (default: `http://localhost:5000/api`).
@@ -582,7 +581,7 @@ Edit `frontend/.env` — set `VITE_API_BASE_URL` to your backend URL (default: `
 |---|:---:|---|---|
 | `NODE_ENV` | Yes | `development` | Runtime environment |
 | `PORT` | Yes | `5000` | Express server port |
-| `DATABASE_URL` | Yes | — | MySQL connection string |
+| `MONGODB_URI` | Yes | — | MongoDB connection string |
 | `JWT_SECRET` | Yes | — | Secret key for signing JWTs |
 | `JWT_EXPIRES_IN` | Yes | `1d` | JWT expiry (e.g. `1d`, `7d`, `12h`) |
 | `CLIENT_URL` | Yes | `http://localhost:5173` | CORS allowed origin (frontend URL) |
@@ -592,9 +591,10 @@ Edit `frontend/.env` — set `VITE_API_BASE_URL` to your backend URL (default: `
 | `SEED_ADMIN_NAME` | No | `System Administrator` | Default admin full name (seeder) |
 | `SEED_ADMIN_PHONE` | No | `9999999999` | Default admin phone (seeder) |
 
-**`DATABASE_URL` format:**
-```
-mysql://USERNAME:PASSWORD@HOST:PORT/DATABASE_NAME
+**`MONGODB_URI` example:**
+
+```text
+mongodb://localhost:27017/tms_hospital
 ```
 
 > The backend validates all required env vars on startup and exits immediately with a clear error message if any are missing.
@@ -613,14 +613,14 @@ mysql://USERNAME:PASSWORD@HOST:PORT/DATABASE_NAME
 
 **Terminal 1 — Backend:**
 ```powershell
-cd D:\TMS_Hospital\backend
+cd backend
 npm run dev
 ```
 Backend starts on `http://localhost:5000` with hot-reload via nodemon.
 
 **Terminal 2 — Frontend:**
 ```powershell
-cd D:\TMS_Hospital\frontend
+cd frontend
 npm run dev
 ```
 Frontend starts on `http://localhost:5173` with Vite HMR.
@@ -628,7 +628,7 @@ Frontend starts on `http://localhost:5173` with Vite HMR.
 ### Production Build (Frontend)
 
 ```powershell
-cd D:\TMS_Hospital\frontend
+cd frontend
 npm run build
 # Output goes to frontend/dist/
 npm run preview  # Preview the production build locally
@@ -637,47 +637,28 @@ npm run preview  # Preview the production build locally
 ### Production Start (Backend)
 
 ```powershell
-cd D:\TMS_Hospital\backend
+cd backend
 npm start
 ```
 
 ---
 
-## Default Admin Credentials
+## Seed & Default Credentials
 
 After running `npm run seed`, use these credentials to log in:
 
+See `credition.txt` for all seeded users (empId + password).
+
+**Admin (example):**
+
 | Field | Value |
 |---|---|
-| Email | `admin@tmshospital.com` |
+| Employee ID | `EMP-ADMIN-001` |
 | Password | `Admin@12345` |
 
 > These can be customized via the `SEED_ADMIN_*` environment variables before seeding.
 
 **Change the admin password immediately after your first login in a production environment.**
-
----
-
-## Prisma Commands
-
-All commands should be run from the `backend/` directory:
-
-```powershell
-# Generate Prisma client (run after any schema change)
-npx prisma generate
-
-# Create and apply a new migration during development
-npx prisma migrate dev --name <migration_name>
-
-# Apply pending migrations in production (no new migration files created)
-npx prisma migrate deploy
-
-# Open Prisma Studio (visual database browser)
-npx prisma studio
-
-# Reset the database (drops all data, re-migrates, re-seeds)
-npx prisma migrate reset
-```
 
 ---
 
@@ -704,7 +685,7 @@ Files are served statically at `GET /uploads/{filename}`.
 
 All dashboard data is role-scoped:
 - **REQUESTER** — data filtered to their own tickets only
-- **TECHNICIAN** — data filtered to tickets assigned to them
+- **HELPDESK** — includes helpdesk workload and status breakdowns
 - **HELPDESK / HOD / ADMIN** — all tickets
 
 The monthly trend endpoint accepts a `months` query parameter (default: `6`, max: `24`).
