@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { APP_NAME, APP_SUBTITLE, NAV_ITEMS } from '../../config/appConfig';
 import { useAuth } from '../../hooks/useAuth';
+import SidebarAssignmentNotices from './SidebarAssignmentNotices.jsx';
 
 function Sidebar() {
   const { user } = useAuth();
@@ -51,6 +52,7 @@ function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      <SidebarAssignmentNotices />
     </aside>
   );
 }

@@ -18,6 +18,7 @@ const Ticket = require('../../models/Ticket.model');
 
 const ASSIGNABLE_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD];
 const TRANSFER_TARGET_ROLES = [Role.HELPDESK];
+const TICKET_CREATOR_ROLES = [Role.REQUESTER, Role.HOD];
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
 
@@ -57,6 +58,14 @@ const ensureUnassignedOrSameUser = (user, ticket) => {
   const userId = String(user?.id ?? '');
   if (currentAssigneeId === userId) return;
   throw new ApiError(StatusCodes.CONFLICT, 'Ticket is already assigned to another staff member');
+};
+
+const ensureAssignedToUser = (user, ticket) => {
+  const currentAssigneeId = ticket?.assignedToId?.toString?.() ?? '';
+  const userId = String(user?.id ?? '');
+
+  if (currentAssigneeId && currentAssigneeId === userId) return;
+  throw new ApiError(StatusCodes.FORBIDDEN, 'Only the assigned helpdesk agent can resolve this ticket');
 };
 
 const ensureStaffAccess = (user) => {
@@ -130,6 +139,7 @@ const shapeTicket = (ticket) => {
     locationId: t?.locationId?._id?.toString?.() ?? t?.locationId,
     requesterId: t?.requesterId?._id?.toString?.() ?? t?.requesterId,
     assignedToId: t?.assignedToId?._id?.toString?.() ?? t?.assignedToId ?? null,
+    requesterResolutionConfirmedAt: t?.requesterResolutionConfirmedAt ?? null,
     dueAt: computeDueAt(t),
   };
 };
@@ -164,8 +174,8 @@ const buildScopedWhere = (user) => {
 };
 
 const createTicket = async (payload, user) => {
-  if (user?.role !== Role.REQUESTER) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Only requesters can raise a ticket');
+  if (!TICKET_CREATOR_ROLES.includes(user?.role)) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Only requesters and heads of department can raise a ticket');
   }
 
   const title = normalizeText(payload?.title);
@@ -303,6 +313,10 @@ const updateStatus = async (id, payload, user) => {
   const status = normalizeStatus(payload?.status);
   validateStatus(status);
 
+  if (status === TicketStatus.CLOSED) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Closing a ticket must use the official close or requester confirmation flow');
+  }
+
   const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
   ensureAssigneeOrStaff(user, ticket);
@@ -377,6 +391,9 @@ const transferTicket = async (id, payload, user) => {
 
   const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
+  if (user.role === Role.HELPDESK) {
+    ensureAssignedToUser(user, ticket);
+  }
 
   const oldAssigneeId = ticket.assignedToId?.toString?.() ?? null;
   ticket.assignedToId = assignee._id;
@@ -385,13 +402,24 @@ const transferTicket = async (id, payload, user) => {
   }
   await ticket.save();
 
+  const actorName = String(user?.fullName ?? '').trim() || 'Staff';
+  const leadershipRemarks = () => {
+    const roleLabel = user.role === Role.HOD ? 'HOD' : user.role === Role.ADMIN ? 'Administrator' : '';
+    const base = `Direct assignment by ${roleLabel} ${actorName} to ${assignee.fullName}.`;
+    return trimmedNote ? `${base} ${trimmedNote}` : base;
+  };
+  const helpdeskRemarks = () =>
+    trimmedNote ? `Transferred to ${assignee.fullName}. ${trimmedNote}` : `Transferred to ${assignee.fullName}.`;
+
+  const transferRemarks = [Role.HOD, Role.ADMIN].includes(user.role) ? leadershipRemarks() : helpdeskRemarks();
+
   await createActivityLog(null, {
     ticketId: ticket._id,
     userId: user.id,
     action: 'TRANSFERRED',
     oldValue: oldAssigneeId,
     newValue: assignee._id.toString(),
-    remarks: trimmedNote ? `Transferred to ${assignee.fullName}. ${trimmedNote}` : `Transferred to ${assignee.fullName}`,
+    remarks: transferRemarks,
   });
 
   const full = await populateTicket(Ticket.findById(ticket._id)).lean();
@@ -402,10 +430,19 @@ const resolveTicket = async (id, payload, user) => {
   const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
   ensureAssigneeOrStaff(user, ticket);
+  // Helpdesk agents can only resolve tickets assigned to themselves.
+  if (user.role === Role.HELPDESK) {
+    ensureAssignedToUser(user, ticket);
+  }
+
+  if ([TicketStatus.RESOLVED, TicketStatus.CLOSED, TicketStatus.CANCELLED].includes(ticket.status)) {
+    throw new ApiError(StatusCodes.CONFLICT, 'Ticket cannot be resolved in its current state');
+  }
 
   const oldStatus = ticket.status;
   ticket.status = TicketStatus.RESOLVED;
   ticket.resolvedAt = new Date();
+  ticket.requesterResolutionConfirmedAt = null;
   await ticket.save();
 
   await createActivityLog(null, {
@@ -424,6 +461,23 @@ const resolveTicket = async (id, payload, user) => {
 const closeTicket = async (id, user) => {
   ensureStaffAccess(user);
   const ticket = await getTicketDocOrThrow(id);
+  ensureCanViewTicket(user, ticket);
+  if (user.role === Role.HELPDESK) {
+    ensureAssignedToUser(user, ticket);
+  }
+
+  if (ticket.status !== TicketStatus.RESOLVED) {
+    throw new ApiError(StatusCodes.CONFLICT, 'Only resolved tickets can be closed');
+  }
+
+  const isAdmin = user.role === Role.ADMIN;
+  if (!isAdmin && !ticket.requesterResolutionConfirmedAt) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      'The requester must confirm that the resolution worked before this ticket can be closed.',
+    );
+  }
+
   const oldStatus = ticket.status;
   ticket.status = TicketStatus.CLOSED;
   ticket.closedAt = new Date();
@@ -433,13 +487,57 @@ const closeTicket = async (id, user) => {
   return shapeTicket(full);
 };
 
+const REQUESTER_CONFIRM_NOTE_MAX_LEN = 500;
+
+const confirmResolutionAndClose = async (id, payload, user) => {
+  const ticket = await getTicketDocOrThrow(id);
+  ensureCanViewTicket(user, ticket);
+
+  const requesterId = ticket.requesterId?.toString?.() ?? String(ticket.requesterId ?? '');
+  const userId = String(user?.id ?? '');
+  if (!requesterId || requesterId !== userId) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Only the ticket requester can confirm the resolution');
+  }
+
+  if (ticket.status !== TicketStatus.RESOLVED) {
+    throw new ApiError(StatusCodes.CONFLICT, 'You can only confirm after the ticket has been marked resolved by support.');
+  }
+
+  const noteRaw = payload?.note !== undefined && payload?.note !== null ? String(payload.note) : '';
+  const noteTrimmed = noteRaw.trim().slice(0, REQUESTER_CONFIRM_NOTE_MAX_LEN);
+
+  const oldStatus = ticket.status;
+  const now = new Date();
+  ticket.requesterResolutionConfirmedAt = now;
+  ticket.status = TicketStatus.CLOSED;
+  ticket.closedAt = now;
+  await ticket.save();
+
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'REQUESTER_CONFIRMED_RESOLUTION',
+    oldValue: oldStatus,
+    newValue: ticket.status,
+    remarks: noteTrimmed || 'Requester confirmed the resolution; ticket closed.',
+  });
+
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
+};
+
 const reopenTicket = async (id, user) => {
   ensureStaffAccess(user);
   const ticket = await getTicketDocOrThrow(id);
+  ensureCanViewTicket(user, ticket);
+  if (user.role === Role.HELPDESK) {
+    ensureAssignedToUser(user, ticket);
+  }
   const oldStatus = ticket.status;
   ticket.status = TicketStatus.REOPENED;
   ticket.resolvedAt = null;
   ticket.closedAt = null;
+  ticket.requesterResolutionConfirmedAt = null;
   await ticket.save();
   await createActivityLog(null, { ticketId: ticket._id, userId: user.id, action: 'REOPENED', oldValue: oldStatus, newValue: ticket.status, remarks: 'Ticket reopened' });
   const full = await populateTicket(Ticket.findById(ticket._id)).lean();
@@ -486,6 +584,7 @@ module.exports = {
   transferTicket,
   resolveTicket,
   closeTicket,
+  confirmResolutionAndClose,
   reopenTicket,
   getPendingEscalations,
   escalateTicket,

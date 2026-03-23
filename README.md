@@ -267,7 +267,7 @@ MAPIMS/
 
 | Action | ADMIN | HELPDESK | HOD | REQUESTER |
 |---|:---:|:---:|:---:|:---:|
-| Create ticket | — | — | — | ✓ |
+| Create ticket | — | — | ✓ | ✓ |
 | View all tickets | ✓ | ✓ | ✓ | — |
 | View own tickets | ✓ | ✓ | ✓ | ✓ |
 | Claim / handle ticket | ✓ | ✓ | ✓ | — |

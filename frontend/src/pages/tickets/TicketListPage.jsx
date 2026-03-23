@@ -102,7 +102,8 @@ function TicketListPage() {
     setIsHandledByMeOnly(false);
   };
 
-  const actions = user?.role === 'REQUESTER'
+  const canRaiseTicket = user?.role === 'REQUESTER' || user?.role === 'HOD';
+  const actions = canRaiseTicket
     ? [<Link key="create" to="/tickets/create" className="btn btn-primary">Create Ticket</Link>]
     : [];
 
@@ -178,7 +179,7 @@ function TicketListPage() {
           title="No tickets found"
           description="There are no tickets matching the selected filters."
           action={
-            user?.role === 'REQUESTER' ? (
+            canRaiseTicket ? (
               <Link to="/tickets/create" className="btn btn-primary">
                 Create Ticket
               </Link>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader.jsx';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
 import TicketForm from '../../components/tickets/TicketForm.jsx';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { getCategories, getDepartments, getLocations, getSubcategories } from '../../services/masterDataService';
 import { createTicketRequest } from '../../services/ticketService';
@@ -33,6 +34,7 @@ const ALLOWED_ATTACHMENT_TYPES = [
 
 function TicketCreatePage() {
   const toast = useToast();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [formState, setFormState] = useState(initialFormState);
   const [errors, setErrors] = useState({});
@@ -166,7 +168,14 @@ function TicketCreatePage() {
 
   return (
     <>
-      <PageHeader title="Create Ticket" subtitle="Raise a new hospital service request with the required operational details." />
+      <PageHeader
+        title="Create Ticket"
+        subtitle={
+          user?.role === 'HOD'
+            ? 'Raise a ticket as a department head (e.g. HOD-to-HOD or HOD-to-operations). You are recorded as the requester.'
+            : 'Raise a new hospital service request with the required operational details.'
+        }
+      />
       {pageError ? <div className="alert alert-danger">{pageError}</div> : null}
       <TicketForm
         formState={formState}

@@ -94,6 +94,16 @@ const closeTicket = asyncHandler(async (req, res) => {
   });
 });
 
+const confirmResolutionAndClose = asyncHandler(async (req, res) => {
+  const data = await ticketService.confirmResolutionAndClose(req.params.id, req.body, req.user);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    message: 'Resolution confirmed and ticket closed successfully',
+    data,
+  });
+});
+
 const reopenTicket = asyncHandler(async (req, res) => {
   const data = await ticketService.reopenTicket(req.params.id, req.user);
 
@@ -135,6 +145,7 @@ module.exports = {
   transferTicket,
   resolveTicket,
   closeTicket,
+  confirmResolutionAndClose,
   reopenTicket,
   getPendingEscalations,
   escalateTicket,

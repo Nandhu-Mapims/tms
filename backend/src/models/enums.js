@@ -27,4 +27,11 @@ const TicketStatus = Object.freeze({
   CANCELLED: 'CANCELLED',
 });
 
-module.exports = { Role, Priority, TicketStatus };
+const TransferRequestStatus = Object.freeze({
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED',
+});
+
+module.exports = { Role, Priority, TicketStatus, TransferRequestStatus };

@@ -6,6 +6,12 @@ const jsonConfig = {
   },
 };
 
+const REQUEST_TIMEOUT_MS = 15_000;
+const jsonConfigWithTimeout = {
+  ...jsonConfig,
+  timeout: REQUEST_TIMEOUT_MS,
+};
+
 export const getTicketsRequest = async (params = {}) => {
   const response = await apiClient.get('/tickets', { params });
   return response.data;
@@ -65,27 +71,32 @@ export const claimTicketRequest = async (id) => {
 };
 
 export const transferTicketRequest = async (id, payload) => {
-  const response = await apiClient.patch(`/tickets/${id}/transfer`, payload, jsonConfig);
+  const response = await apiClient.patch(`/tickets/${id}/transfer`, payload, jsonConfigWithTimeout);
   return response.data;
 };
 
 export const resolveTicketRequest = async (id, payload) => {
-  const response = await apiClient.patch(`/tickets/${id}/resolve`, payload, jsonConfig);
+  const response = await apiClient.patch(`/tickets/${id}/resolve`, payload, jsonConfigWithTimeout);
   return response.data;
 };
 
 export const closeTicketRequest = async (id) => {
-  const response = await apiClient.patch(`/tickets/${id}/close`, {}, jsonConfig);
+  const response = await apiClient.patch(`/tickets/${id}/close`, {}, jsonConfigWithTimeout);
+  return response.data;
+};
+
+export const confirmResolutionRequest = async (id, payload = {}) => {
+  const response = await apiClient.patch(`/tickets/${id}/confirm-resolution`, payload, jsonConfigWithTimeout);
   return response.data;
 };
 
 export const reopenTicketRequest = async (id) => {
-  const response = await apiClient.patch(`/tickets/${id}/reopen`, {}, jsonConfig);
+  const response = await apiClient.patch(`/tickets/${id}/reopen`, {}, jsonConfigWithTimeout);
   return response.data;
 };
 
 export const escalateTicketRequest = async (id, payload) => {
-  const response = await apiClient.patch(`/tickets/${id}/escalate`, payload, jsonConfig);
+  const response = await apiClient.patch(`/tickets/${id}/escalate`, payload, jsonConfigWithTimeout);
   return response.data;
 };
 
@@ -119,5 +130,35 @@ export const addTicketAttachmentRequest = async (id, file) => {
 
 export const getTicketActivityLogRequest = async (id) => {
   const response = await apiClient.get(`/tickets/${id}/activity-log`);
+  return response.data;
+};
+
+export const getAssignmentNoticesRequest = async () => {
+  const response = await apiClient.get('/tickets/assignment-notices', { timeout: REQUEST_TIMEOUT_MS });
+  return response.data;
+};
+
+export const createTicketTransferRequest = async (ticketIdentifier, payload = {}) => {
+  const response = await apiClient.post(`/tickets/${ticketIdentifier}/transfer-requests`, payload, jsonConfigWithTimeout);
+  return response.data;
+};
+
+export const getSentTicketTransferRequests = async (params = {}) => {
+  const response = await apiClient.get('/tickets/transfer-requests/sent', { params, timeout: REQUEST_TIMEOUT_MS });
+  return response.data;
+};
+
+export const getReceivedTicketTransferRequests = async (params = {}) => {
+  const response = await apiClient.get('/tickets/transfer-requests/received', { params, timeout: REQUEST_TIMEOUT_MS });
+  return response.data;
+};
+
+export const approveTicketTransferRequest = async (requestId, payload = {}) => {
+  const response = await apiClient.patch(`/tickets/transfer-requests/${requestId}/approve`, payload, jsonConfigWithTimeout);
+  return response.data;
+};
+
+export const rejectTicketTransferRequest = async (requestId, payload = {}) => {
+  const response = await apiClient.patch(`/tickets/transfer-requests/${requestId}/reject`, payload, jsonConfigWithTimeout);
   return response.data;
 };

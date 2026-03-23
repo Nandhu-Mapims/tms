@@ -26,11 +26,18 @@ export const NAV_ITEMS = [
     roles: ['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER'],
   },
   {
+    key: 'transfer-requests',
+    label: 'Transfer Requests',
+    icon: 'bi-arrow-repeat',
+    path: '/transfer-requests',
+    roles: ['HELPDESK'],
+  },
+  {
     key: 'create-ticket',
     label: 'Create Ticket',
     icon: 'bi-plus-square',
     path: '/tickets/create',
-    roles: ['REQUESTER'],
+    roles: ['REQUESTER', 'HOD'],
   },
   {
     key: 'departments',

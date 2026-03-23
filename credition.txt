@@ -10,4 +10,4 @@ REQUESTER	Pharmacist Sunita Rao	EMP-REQ-003	sunita.rao@tmshospital.com	User@1234
 
 Notes:
 - TECHNICIAN role removed (do not use old technician credentials)
-- Only REQUESTER can create tickets
+- REQUESTER and HOD can create tickets (HOD–HOD internal requests)

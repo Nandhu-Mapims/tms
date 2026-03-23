@@ -16,6 +16,7 @@ import {
   addTicketCommentRequest,
   claimTicketRequest,
   closeTicketRequest,
+  confirmResolutionRequest,
   escalateTicketRequest,
   getTicketActivityLogRequest,
   getTicketAttachmentsRequest,
@@ -24,6 +25,7 @@ import {
   reopenTicketRequest,
   resolveTicketRequest,
   transferTicketRequest,
+  createTicketTransferRequest,
   updateTicketStatusRequest,
 } from '../../services/ticketService';
 import {
@@ -43,6 +45,7 @@ function TicketDetailsPage() {
   const toast = useToast();
   const { confirm } = useConfirmDialog();
   const { user } = useAuth();
+  const isLeadershipRole = user?.role === 'HOD' || user?.role === 'ADMIN';
   const [ticket, setTicket] = useState(null);
   const [comments, setComments] = useState([]);
   const [attachments, setAttachments] = useState([]);
@@ -211,13 +214,20 @@ function TicketDetailsPage() {
 
     await executeAction({
       action: () => transferTicketRequest(id, { assignedToId, note: transferState.note }),
-      successMessage: 'Ticket transferred successfully.',
-      confirmOptions: {
-        title: 'Transfer Ticket',
-        message: 'Transfer this ticket to the selected helpdesk agent?',
-        confirmText: 'Transfer',
-        variant: 'warning',
-      },
+      successMessage: isLeadershipRole ? 'Ticket assigned to helpdesk successfully.' : 'Ticket transferred successfully.',
+      confirmOptions: isLeadershipRole
+        ? {
+            title: 'Assign to helpdesk',
+            message: 'Assign this ticket directly to the selected helpdesk agent? (No transfer request needed.)',
+            confirmText: 'Assign',
+            variant: 'primary',
+          }
+        : {
+            title: 'Transfer Ticket',
+            message: 'Transfer this ticket to the selected helpdesk agent?',
+            confirmText: 'Transfer',
+            variant: 'warning',
+          },
     });
 
     closeTransferModal();
@@ -291,9 +301,21 @@ function TicketDetailsPage() {
 
   const isStaff = user?.role !== 'REQUESTER';
   const canResolve = canResolveTicket(user?.role);
+  const requiresAssignmentForRole = user?.role === 'HELPDESK';
+  const isAssignedToCurrentUser = String(ticket?.assignedToId ?? '') === String(user?.id ?? '');
+  const canResolveForUser = Boolean(canResolve && (!requiresAssignmentForRole || isAssignedToCurrentUser));
   const canClose = canCloseTicket(user?.role);
+  const canCloseForUser = Boolean(canClose && (!requiresAssignmentForRole || isAssignedToCurrentUser));
+  const isTicketRequester = String(ticket?.requesterId ?? '') === String(user?.id ?? '');
+  const canAdminForceCloseResolved =
+    user?.role === 'ADMIN' && canCloseForUser && ticket?.status === 'RESOLVED';
+  const canConfirmResolutionClose = isTicketRequester && ticket?.status === 'RESOLVED';
   const canReopen = canReopenTicket(user?.role);
+  const canReopenForUser = Boolean(canReopen && (!requiresAssignmentForRole || isAssignedToCurrentUser));
   const canEscalate = canEscalateTicket(user?.role);
+  const canTransferForUser = !requiresAssignmentForRole || (Boolean(ticket?.assignedToId) && isAssignedToCurrentUser);
+  const canUpdateStatusForUser = !requiresAssignmentForRole || !ticket?.assignedToId || isAssignedToCurrentUser;
+  const isResolvedState = ['RESOLVED', 'CLOSED', 'CANCELLED'].includes(ticket?.status);
 
   const primaryActions = [];
   const secondaryActions = [];
@@ -312,7 +334,53 @@ function TicketDetailsPage() {
     );
   }
 
-  if (canResolve && ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED' && ticket.status !== 'CANCELLED') {
+  if (isLeadershipRole && canTransferForUser && !isResolvedState) {
+    primaryActions.push(
+      <button
+        key="hod-assign-helpdesk"
+        type="button"
+        className="btn btn-primary"
+        disabled={isActionLoading}
+        onClick={openTransferModal}
+      >
+        Assign to helpdesk
+      </button>
+    );
+  }
+
+  const canRequestTransferToMe =
+    user?.role === 'HELPDESK' &&
+    Boolean(ticket?.assignedToId) &&
+    ticket?.assignedTo?.role === 'HELPDESK' &&
+    !isAssignedToCurrentUser &&
+    !isResolvedState;
+
+  if (canRequestTransferToMe) {
+    primaryActions.push(
+      <button
+        key="request-transfer"
+        type="button"
+        className="btn btn-outline-primary"
+        disabled={isActionLoading}
+        onClick={() =>
+          executeAction({
+            action: () => createTicketTransferRequest(id, {}),
+            successMessage: 'Transfer request sent.',
+            confirmOptions: {
+              title: 'Request Transfer',
+              message: 'Request the assigned helpdesk agent to transfer this ticket to you?',
+              confirmText: 'Send Request',
+              variant: 'primary',
+            },
+          })
+        }
+      >
+        Request Transfer
+      </button>
+    );
+  }
+
+  if (canResolveForUser && ticket.status !== 'RESOLVED' && ticket.status !== 'CLOSED' && ticket.status !== 'CANCELLED') {
     primaryActions.push(
       <button
         key="resolve"
@@ -322,10 +390,10 @@ function TicketDetailsPage() {
         onClick={() =>
           executeAction({
             action: () => resolveTicketRequest(id, { resolutionNote: 'Resolved from ticket detail page.' }),
-            successMessage: 'Ticket resolved successfully.',
+            successMessage: 'Ticket resolved. The requester must confirm before it is fully closed.',
             confirmOptions: {
               title: 'Resolve Ticket',
-              message: 'Mark this ticket as resolved now?',
+              message: 'Mark this ticket as resolved? The requester will need to confirm before the ticket can be fully closed.',
               confirmText: 'Resolve',
               variant: 'primary',
             },
@@ -337,32 +405,57 @@ function TicketDetailsPage() {
     );
   }
 
-  if (canClose) {
+  if (canConfirmResolutionClose) {
+    primaryActions.push(
+      <button
+        key="confirm-resolution"
+        type="button"
+        className="btn btn-success"
+        disabled={isActionLoading}
+        onClick={() =>
+          executeAction({
+            action: () => confirmResolutionRequest(id, {}),
+            successMessage: 'Thank you. The ticket is now closed.',
+            confirmOptions: {
+              title: 'Confirm resolution',
+              message: 'Confirm that the issue is fixed? This will fully close the ticket.',
+              confirmText: 'Yes, close ticket',
+              variant: 'primary',
+            },
+          })
+        }
+      >
+        Confirm fix & close
+      </button>
+    );
+  }
+
+  if (canAdminForceCloseResolved) {
     primaryActions.push(
       <button
         key="close"
         type="button"
         className="btn btn-outline-success"
-        disabled={isActionLoading || ticket.status !== 'RESOLVED'}
+        disabled={isActionLoading}
         onClick={() =>
           executeAction({
             action: () => closeTicketRequest(id),
             successMessage: 'Ticket closed successfully.',
             confirmOptions: {
-              title: 'Close Ticket',
-              message: 'Close this resolved ticket? Further edits will require reopening.',
+              title: 'Close Ticket (admin)',
+              message: 'Close this ticket without requester confirmation? Use only when appropriate.',
               confirmText: 'Close Ticket',
               variant: 'warning',
             },
           })
         }
       >
-        Close
+        Close (admin override)
       </button>
     );
   }
 
-  if (canReopen) {
+  if (canReopenForUser) {
     secondaryActions.push(
       <button
         key="reopen"
@@ -388,53 +481,57 @@ function TicketDetailsPage() {
   }
 
   if (isStaff) {
-    secondaryActions.push(
-      <button
-        key="open"
-        type="button"
-        className="dropdown-item"
-        disabled={isActionLoading}
-        onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'OPEN' }), successMessage: 'Ticket marked open.' })}
-      >
-        Mark Open
-      </button>
-    );
+    if (canUpdateStatusForUser) {
+      secondaryActions.push(
+        <button
+          key="open"
+          type="button"
+          className="dropdown-item"
+          disabled={isActionLoading}
+          onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'OPEN' }), successMessage: 'Ticket marked open.' })}
+        >
+          Mark Open
+        </button>
+      );
 
-    secondaryActions.push(
-      <button
-        key="inprogress"
-        type="button"
-        className="dropdown-item"
-        disabled={isActionLoading}
-        onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'IN_PROGRESS' }), successMessage: 'Ticket moved to in progress.' })}
-      >
-        Mark In Progress
-      </button>
-    );
+      secondaryActions.push(
+        <button
+          key="inprogress"
+          type="button"
+          className="dropdown-item"
+          disabled={isActionLoading}
+          onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'IN_PROGRESS' }), successMessage: 'Ticket moved to in progress.' })}
+        >
+          Mark In Progress
+        </button>
+      );
 
-    secondaryActions.push(
-      <button
-        key="hold"
-        type="button"
-        className="dropdown-item"
-        disabled={isActionLoading}
-        onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'ON_HOLD' }), successMessage: 'Ticket placed on hold.' })}
-      >
-        Put On Hold
-      </button>
-    );
+      secondaryActions.push(
+        <button
+          key="hold"
+          type="button"
+          className="dropdown-item"
+          disabled={isActionLoading}
+          onClick={() => executeAction({ action: () => updateTicketStatusRequest(id, { status: 'ON_HOLD' }), successMessage: 'Ticket placed on hold.' })}
+        >
+          Put On Hold
+        </button>
+      );
+    }
 
-    secondaryActions.push(
-      <button
-        key="transfer"
-        type="button"
-        className="dropdown-item"
-        disabled={isActionLoading}
-        onClick={openTransferModal}
-      >
-        Transfer to agent
-      </button>
-    );
+    if (canTransferForUser && !isLeadershipRole) {
+      secondaryActions.push(
+        <button
+          key="transfer"
+          type="button"
+          className="dropdown-item"
+          disabled={isActionLoading}
+          onClick={openTransferModal}
+        >
+          Transfer to agent
+        </button>
+      );
+    }
   }
 
   if (canEscalate) {
@@ -500,13 +597,23 @@ function TicketDetailsPage() {
     <>
       <PageHeader title={ticket.ticketNumber} subtitle={ticket.title} actions={actions} />
       {pageError ? <div className="alert alert-danger">{pageError}</div> : null}
+      {ticket.status === 'RESOLVED' && isTicketRequester ? (
+        <div className="alert alert-info mb-3">
+          Support has marked this ticket <strong>resolved</strong>. If the issue is fixed, use <strong>Confirm fix & close</strong> to fully close it.
+        </div>
+      ) : null}
+      {ticket.status === 'RESOLVED' && isStaff && !isTicketRequester ? (
+        <div className="alert alert-secondary mb-3">
+          This ticket is resolved and waiting for the <strong>requester</strong> to confirm before it can be fully closed.
+        </div>
+      ) : null}
 
       {transferState.open ? (
         <div className="modal fade show d-block modal-backdrop-soft" tabIndex="-1" role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 shadow">
               <div className="modal-header">
-                <h2 className="modal-title fs-5">Transfer Ticket</h2>
+                <h2 className="modal-title fs-5">{isLeadershipRole ? 'Assign ticket to helpdesk' : 'Transfer Ticket'}</h2>
                 <button type="button" className="btn-close" onClick={closeTransferModal}></button>
               </div>
               <div className="modal-body">
@@ -537,7 +644,7 @@ function TicketDetailsPage() {
                       className="form-control"
                       value={transferState.note}
                       onChange={(e) => setTransferState((prev) => ({ ...prev, note: e.target.value }))}
-                      placeholder="Reason for transfer"
+                      placeholder={isLeadershipRole ? 'Optional note for assignment' : 'Reason for transfer'}
                       maxLength={200}
                     />
                   </div>
@@ -548,7 +655,7 @@ function TicketDetailsPage() {
                   Cancel
                 </button>
                 <button type="button" className="btn btn-primary" onClick={submitTransfer} disabled={isActionLoading || transferState.isLoading}>
-                  {isActionLoading ? 'Transferring...' : 'Transfer'}
+                  {isActionLoading ? (isLeadershipRole ? 'Assigning...' : 'Transferring...') : isLeadershipRole ? 'Assign' : 'Transfer'}
                 </button>
               </div>
             </div>

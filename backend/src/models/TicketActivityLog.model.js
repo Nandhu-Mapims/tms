@@ -14,5 +14,6 @@ const ticketActivityLogSchema = new mongoose.Schema(
 );
 
 ticketActivityLogSchema.index({ ticketId: 1, createdAt: -1 });
+ticketActivityLogSchema.index({ action: 1, toValue: 1, createdAt: -1 });
 
 module.exports = mongoose.model('TicketActivityLog', ticketActivityLogSchema);

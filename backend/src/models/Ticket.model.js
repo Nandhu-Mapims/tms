@@ -24,6 +24,8 @@ const ticketSchema = new mongoose.Schema(
     escalationDueAt: { type: Date, default: null },
     firstRespondedAt: { type: Date, default: null },
     resolvedAt: { type: Date, default: null },
+    /** Set when the requester confirms the resolution (ticket is then closed). */
+    requesterResolutionConfirmedAt: { type: Date, default: null },
     closedAt: { type: Date, default: null },
     escalatedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
