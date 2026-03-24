@@ -112,6 +112,66 @@ const validateMasterLinks = async ({ departmentId, categoryId, subcategoryId, lo
   return { department, category, subcategory, location };
 };
 
+const hasKeyword = (text, keywords) => keywords.some((keyword) => text.includes(keyword));
+
+const inferPriorityFromPrompt = (prompt) => {
+  const text = String(prompt ?? '').toLowerCase();
+  if (!text) return Priority.MEDIUM;
+  if (hasKeyword(text, ['critical', 'life support', 'down', 'not working at all', 'emergency', 'urgent'])) return Priority.CRITICAL;
+  if (hasKeyword(text, ['high', 'asap', 'immediately', 'blocked'])) return Priority.HIGH;
+  if (hasKeyword(text, ['minor', 'low', 'whenever', 'small issue'])) return Priority.LOW;
+  return Priority.MEDIUM;
+};
+
+const scoreMasterMatch = (prompt, value = '') => {
+  const text = String(prompt ?? '').toLowerCase();
+  const candidate = String(value ?? '').toLowerCase().trim();
+  if (!text || !candidate) return 0;
+  if (text.includes(candidate)) return candidate.length + 20;
+  const words = candidate.split(/\s+/).filter(Boolean);
+  return words.reduce((score, word) => (word.length > 2 && text.includes(word) ? score + word.length : score), 0);
+};
+
+const pickBestByPrompt = (items, prompt, projector) => {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) return null;
+  const scored = safeItems
+    .map((item) => ({ item, score: scoreMasterMatch(prompt, projector(item)) }))
+    .sort((a, b) => b.score - a.score);
+  return scored[0]?.item ?? safeItems[0];
+};
+
+const inferTicketClassification = async (prompt) => {
+  const [departments, categories, subcategories, locations] = await Promise.all([
+    Department.find({ isActive: true }).select('_id name code').lean(),
+    Category.find({ isActive: true }).select('_id name code').lean(),
+    Subcategory.find({ isActive: true }).select('_id name code categoryId').lean(),
+    Location.find({ isActive: true }).select('_id block floor ward room unit').lean(),
+  ]);
+
+  if (!departments.length || !categories.length || !subcategories.length || !locations.length) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Master data is incomplete. Please configure departments, categories, subcategories, and locations.');
+  }
+
+  const category = pickBestByPrompt(categories, prompt, (item) => `${item?.name ?? ''} ${item?.code ?? ''}`);
+  const eligibleSubcategories = subcategories.filter((item) => String(item?.categoryId ?? '') === String(category?._id ?? ''));
+  const subcategory = pickBestByPrompt(
+    eligibleSubcategories.length ? eligibleSubcategories : subcategories,
+    prompt,
+    (item) => `${item?.name ?? ''} ${item?.code ?? ''}`,
+  );
+  const department = pickBestByPrompt(departments, prompt, (item) => `${item?.name ?? ''} ${item?.code ?? ''}`);
+  const location = pickBestByPrompt(locations, prompt, (item) => `${item?.block ?? ''} ${item?.floor ?? ''} ${item?.ward ?? ''} ${item?.room ?? ''} ${item?.unit ?? ''}`);
+
+  return {
+    departmentId: department?._id,
+    categoryId: category?._id,
+    subcategoryId: subcategory?._id,
+    locationId: location?._id,
+    priority: inferPriorityFromPrompt(prompt),
+  };
+};
+
 const populateTicket = (query) =>
   query
     .populate({ path: 'departmentId', select: 'name code' })
@@ -178,20 +238,34 @@ const createTicket = async (payload, user) => {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Only requesters and heads of department can raise a ticket');
   }
 
-  const title = normalizeText(payload?.title);
-  const description = normalizeText(payload?.description) || null;
+  const prompt = normalizeText(payload?.prompt) || normalizeText(payload?.description) || normalizeText(payload?.title);
+  const title = normalizeText(payload?.title) || (prompt ? prompt.slice(0, 120) : null);
+  const description = normalizeText(payload?.description) || prompt || null;
   const telecomNumber = normalizeText(payload?.telecomNumber) || null;
-  const priority = payload?.priority;
+  const providedPriority = payload?.priority;
 
   if (!title) throw new ApiError(StatusCodes.BAD_REQUEST, 'title is required');
-  validatePriority(priority);
+  if (!description) throw new ApiError(StatusCodes.BAD_REQUEST, 'prompt is required');
 
-  const departmentId = toObjectId(payload?.departmentId, 'departmentId');
-  const categoryId = toObjectId(payload?.categoryId, 'categoryId');
-  const subcategoryId = toObjectId(payload?.subcategoryId, 'subcategoryId');
-  const locationId = toObjectId(payload?.locationId, 'locationId');
+  const hasManualClassification = Boolean(payload?.departmentId && payload?.categoryId && payload?.subcategoryId && payload?.locationId && providedPriority);
+  const inferred = hasManualClassification
+    ? {
+        departmentId: toObjectId(payload?.departmentId, 'departmentId'),
+        categoryId: toObjectId(payload?.categoryId, 'categoryId'),
+        subcategoryId: toObjectId(payload?.subcategoryId, 'subcategoryId'),
+        locationId: toObjectId(payload?.locationId, 'locationId'),
+        priority: providedPriority,
+      }
+    : await inferTicketClassification(prompt);
 
-  const { category } = await validateMasterLinks({ departmentId, categoryId, subcategoryId, locationId });
+  validatePriority(inferred.priority);
+
+  const { category } = await validateMasterLinks({
+    departmentId: inferred.departmentId,
+    categoryId: inferred.categoryId,
+    subcategoryId: inferred.subcategoryId,
+    locationId: inferred.locationId,
+  });
 
   const ticketNumber = await generateTicketNumber(category.code ?? 'GEN');
 
@@ -199,12 +273,12 @@ const createTicket = async (payload, user) => {
     ticketNumber,
     title,
     description,
-    priority,
+    priority: inferred.priority,
     status: TicketStatus.OPEN,
-    departmentId,
-    categoryId,
-    subcategoryId,
-    locationId,
+    departmentId: inferred.departmentId,
+    categoryId: inferred.categoryId,
+    subcategoryId: inferred.subcategoryId,
+    locationId: inferred.locationId,
     requesterId: toObjectId(user.id, 'userId'),
     assignedToId: null,
     telecomNumber,
