@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { APP_NAME } from '../../config/appConfig';
 import { getErrorMessage } from '../../utils/getErrorMessage';
-import { validateMinLength, validateRequired } from '../../utils/validators';
+import { validateFiveDigitEmpId, validateMinLength } from '../../utils/validators';
 
 function LoginPage() {
   const toast = useToast();
@@ -102,8 +102,12 @@ function LoginPage() {
                       id="empId"
                       name="empId"
                       type="text"
+                      inputMode="numeric"
+                      autoComplete="username"
+                      maxLength={5}
+                      pattern="[0-9]{5}"
                       className={`form-control form-control-lg ${errors.empId ? 'is-invalid' : ''}`}
-                      placeholder="e.g. 432156"
+                      placeholder="e.g. 10001"
                       value={formState.empId}
                       onChange={handleChange}
                     />

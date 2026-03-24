@@ -1,4 +1,4 @@
-﻿export const isBlank = (value) => String(value ?? '').trim() === '';
+export const isBlank = (value) => String(value ?? '').trim() === '';
 
 export const validateRequired = (value, label) => {
   if (isBlank(value)) {
@@ -15,6 +15,15 @@ export const validateEmail = (value) => {
 
   const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailPattern.test(String(value).trim()) ? '' : 'Enter a valid email address.';
+};
+
+export const validateFiveDigitEmpId = (value) => {
+  if (isBlank(value)) {
+    return 'Employee ID is required.';
+  }
+
+  const trimmed = String(value).trim();
+  return /^\d{5}$/.test(trimmed) ? '' : 'Employee ID must be exactly 5 digits (numbers only).';
 };
 
 export const validateMinLength = (value, minLength, label) => {

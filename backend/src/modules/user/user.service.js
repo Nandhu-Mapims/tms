@@ -8,6 +8,7 @@ const ApiError = require('../../utils/ApiError');
 const sanitizeUser = require('../../utils/sanitizeUser');
 const { Role } = require('../../models/enums');
 const User = require('../../models/User.model');
+const { normalizeEmpId } = require('../../utils/empId');
 const Department = require('../../models/Department.model');
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -117,6 +118,17 @@ const updateUser = async (id, payload = {}, currentUser) => {
 
   if (String(currentUser.id) === String(existingUser._id) && payload.role && payload.role !== existingUser.role) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'You cannot change your own role');
+  }
+
+  if (payload.empId !== undefined) {
+    const normalizedEmpId = normalizeEmpId(payload.empId);
+    if (normalizedEmpId !== existingUser.empId) {
+      const duplicateEmp = await User.findOne({ empId: normalizedEmpId, _id: { $ne: existingUser._id } }).lean();
+      if (duplicateEmp) {
+        throw new ApiError(StatusCodes.CONFLICT, 'Employee ID is already registered');
+      }
+      existingUser.empId = normalizedEmpId;
+    }
   }
 
   if (payload.fullName !== undefined) existingUser.fullName = normalizeText(payload.fullName);

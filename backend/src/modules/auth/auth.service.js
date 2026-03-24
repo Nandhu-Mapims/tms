@@ -6,6 +6,7 @@ const ApiError = require('../../utils/ApiError');
 const generateToken = require('../../utils/generateToken');
 const sanitizeUser = require('../../utils/sanitizeUser');
 const User = require('../../models/User.model');
+const { normalizeEmpId } = require('../../utils/empId');
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -51,7 +52,7 @@ const registerUser = async (payload) => {
   validatePassword(password);
   validateRole(role);
 
-  const normalizedEmpId = empId.trim();
+  const normalizedEmpId = normalizeEmpId(empId);
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
   // Mongo uses ObjectId; keep null for missing values and let later modules validate.
   const normalizedDepartmentId = departmentId ? String(departmentId) : null;
@@ -87,11 +88,11 @@ const registerUser = async (payload) => {
 const loginUser = async (payload) => {
   const { empId, password } = payload;
 
-  if (!empId || !password) {
+  if (empId === undefined || empId === null || String(empId).trim() === '' || !password) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Employee ID and password are required');
   }
 
-  const normalizedEmpId = empId.trim();
+  const normalizedEmpId = normalizeEmpId(empId);
 
   const user = await User.findOne({ empId: normalizedEmpId });
 

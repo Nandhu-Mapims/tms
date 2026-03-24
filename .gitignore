@@ -1,0 +1,2 @@
+# Local Docker Compose secrets (use docker.env.example as template)
+.env

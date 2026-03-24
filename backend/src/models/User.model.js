@@ -5,7 +5,13 @@ const { Role } = require('./enums');
 const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
-    empId: { type: String, required: true, trim: true, unique: true },
+    empId: {
+      type: String,
+      required: true,
+      trim: true,
+      unique: true,
+      match: [/^\d{5}$/, 'Employee ID must be exactly 5 digits'],
+    },
     email: { type: String, default: null, lowercase: true, trim: true, sparse: true, unique: true },
     phone: { type: String, default: null },
     password: { type: String, required: true },

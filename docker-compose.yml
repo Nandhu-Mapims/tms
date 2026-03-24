@@ -1,36 +1,67 @@
-# Purpose: Local development stack using MongoDB (no XAMPP/MySQL/Prisma).
+# TMS (MAPIMS) — Hospital Ticket Management System
+# Usage: docker compose up --build
+#
+# PORTS (avoid clashes with gen_cl 5011/8088, gen_cl_dental 5012/8089):
+#   backend:  5013:5000
+#   frontend: 8090:80
+#   mongo:    internal only (mongodb://mongo:27017/tms_hospital)
+#
+# Optional: create `.env` next to this file to override JWT_SECRET, CLIENT_URL, etc.
+# Seed:     docker compose run --rm backend npm run seed
+
 services:
   mongo:
     image: mongo:7
     container_name: tms_mongo
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: tms_hospital
-    ports:
-      - "27017:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "mongodb://root:password@localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
-      interval: 10s
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
       timeout: 5s
-      retries: 10
-
-  mongo-express:
-    image: mongo-express:1.0.2
-    container_name: tms_mongo_express
+      retries: 5
     restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tms_backend
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/tms_hospital}
+      MONGODB_SERVER_SELECTION_TIMEOUT_MS: ${MONGODB_SERVER_SELECTION_TIMEOUT_MS:-5000}
+      JWT_SECRET: ${JWT_SECRET:-tms-mapims-jwt-secret-min-32-characters-long-for-docker}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:8090}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@tmshospital.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-Admin@12345}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-System Administrator}
+      SEED_ADMIN_PHONE: ${SEED_ADMIN_PHONE:-9999999999}
     depends_on:
       mongo:
         condition: service_healthy
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: root
-      ME_CONFIG_MONGODB_ADMINPASSWORD: password
-      ME_CONFIG_MONGODB_SERVER: mongo
     ports:
-      - "8081:8081"
+      - "5013:5000"
+    volumes:
+      - uploads_data:/app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: tms_frontend
+    ports:
+      - "8090:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
   mongo_data:
+  uploads_data:

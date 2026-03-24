@@ -4,6 +4,7 @@ import { useToast } from '../../hooks/useToast';
 import { getDepartments } from '../../services/masterDataService';
 import { getUsersRequest, registerUserRequest, updateUserRequest, updateUserStatusRequest } from '../../services/authService';
 import { getErrorMessage } from '../../utils/getErrorMessage';
+import { validateFiveDigitEmpId } from '../../utils/validators';
 
 function UserManagementPage() {
   const toast = useToast();
@@ -89,6 +90,7 @@ function UserManagementPage() {
       items={items}
       columns={[
         { key: 'fullName', label: 'Full Name' },
+        { key: 'empId', label: 'Employee ID' },
         { key: 'email', label: 'Email' },
         { key: 'role', label: 'Role' },
         {
@@ -100,7 +102,17 @@ function UserManagementPage() {
       ]}
       fields={[
         { name: 'fullName', label: 'Full Name', required: true, colClass: 'col-md-6' },
-        { name: 'empId', label: 'Employee ID', required: true, colClass: 'col-md-6' },
+        {
+          name: 'empId',
+          label: 'Employee ID',
+          required: true,
+          colClass: 'col-md-6',
+          maxLength: 5,
+          inputMode: 'numeric',
+          pattern: '[0-9]{5}',
+          validate: validateFiveDigitEmpId,
+          helpText: 'Five digits, numbers only (e.g. 10001).',
+        },
         { name: 'email', label: 'Email', type: 'email', colClass: 'col-md-6' },
         { name: 'phone', label: 'Phone', colClass: 'col-md-6' },
         {

@@ -234,6 +234,10 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
                             onChange={(event) => handleChange(field, event)}
                             required={field.required}
                             min={field.min}
+                            maxLength={field.maxLength}
+                            inputMode={field.inputMode}
+                            pattern={field.pattern}
+                            autoComplete={field.autoComplete}
                           />
                           )
                         )}

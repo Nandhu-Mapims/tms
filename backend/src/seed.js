@@ -36,13 +36,33 @@ const SLA_CONFIGS = [
 
 const DEPARTMENTS = [
   { name: 'Information Technology', code: 'IT', description: 'IT infrastructure and support' },
+  { name: 'Biomedical Engineering', code: 'BIOENG', description: 'Medical device maintenance and calibration' },
   { name: 'Cardiology', code: 'CARDIO', description: 'Heart and cardiovascular care' },
   { name: 'Radiology', code: 'RADIO', description: 'Imaging and diagnostics' },
   { name: 'Emergency', code: 'ER', description: 'Emergency and trauma care' },
+  { name: 'Intensive Care', code: 'ICU', description: 'Critical care units' },
   { name: 'Administration', code: 'ADMIN', description: 'Hospital administration' },
   { name: 'Pharmacy', code: 'PHARMA', description: 'Pharmacy and dispensing' },
   { name: 'Laboratory', code: 'LAB', description: 'Pathology and diagnostics lab' },
   { name: 'Nursing', code: 'NURS', description: 'Nursing and ward management' },
+  { name: 'Pediatrics', code: 'PEDIA', description: 'Child and adolescent care' },
+  { name: 'Orthopedics', code: 'ORTHO', description: 'Bone, joint, and musculoskeletal care' },
+  { name: 'Neurology', code: 'NEURO', description: 'Brain and nervous system care' },
+  { name: 'Oncology', code: 'ONCO', description: 'Cancer care and chemotherapy' },
+  { name: 'General Surgery', code: 'SURG', description: 'Surgical services and operating theatres' },
+  { name: 'Anesthesia', code: 'ANES', description: 'Anesthesia and perioperative care' },
+  { name: 'Obstetrics & Gynecology', code: 'OBGYN', description: "Maternity and women's health" },
+  { name: 'Psychiatry', code: 'PSYCH', description: 'Mental health services' },
+  { name: 'ENT', code: 'ENT', description: 'Ear, nose, and throat' },
+  { name: 'Ophthalmology', code: 'OPHTH', description: 'Eye care' },
+  { name: 'Dermatology', code: 'DERM', description: 'Skin and dermatologic care' },
+  { name: 'Physiotherapy', code: 'PHYST', description: 'Rehabilitation and physical therapy' },
+  { name: 'Nutrition & Dietetics', code: 'DIET', description: 'Clinical nutrition' },
+  { name: 'Medical Records', code: 'MEDREC', description: 'Health information management' },
+  { name: 'Human Resources', code: 'HR', description: 'Staffing and HR operations' },
+  { name: 'Finance & Billing', code: 'FIN', description: 'Billing, insurance, and finance' },
+  { name: 'Security', code: 'SEC', description: 'Hospital security and access control' },
+  { name: 'Housekeeping', code: 'HKEEP', description: 'Environmental and cleaning services' },
 ];
 
 const CATEGORIES_WITH_SUBS = [
@@ -137,6 +157,7 @@ const buildTicketNumber = (categoryCode, index) => {
 // ---------------------------------------------------------------------------
 
 const seed = async () => {
+  try {
   await mongoose.connect(MONGO_URI);
   console.log('Connected to MongoDB:', MONGO_URI);
 
@@ -183,7 +204,7 @@ const seed = async () => {
   const locations = await Location.insertMany(LOCATIONS);
   console.log(`Seeded ${locations.length} locations`);
 
-  // Users
+  // Users — named accounts plus one requester per department without a named user
   const [adminPwd, helpdeskPwd, hodPwd, requesterPwd] = await Promise.all([
     hash(process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345'),
     hash('Helpdesk@12345'),
@@ -191,80 +212,98 @@ const seed = async () => {
     hash('User@12345'),
   ]);
 
-  const usersData = [
+  const namedUserSpecs = [
     {
       fullName: process.env.SEED_ADMIN_NAME ?? 'System Administrator',
-      empId: 'EMP-ADMIN-001',
+      empId: '10001',
       email: process.env.SEED_ADMIN_EMAIL ?? 'admin@tmshospital.com',
       phone: process.env.SEED_ADMIN_PHONE ?? '9999999999',
       password: adminPwd,
       role: Role.ADMIN,
-      departmentId: deptByCode['IT']._id,
+      deptCode: 'IT',
     },
     {
       fullName: 'Helpdesk Agent One',
-      empId: 'EMP-HD-001',
+      empId: '10002',
       email: 'helpdesk1@tmshospital.com',
       phone: '9000000001',
       password: helpdeskPwd,
       role: Role.HELPDESK,
-      departmentId: deptByCode['IT']._id,
+      deptCode: 'IT',
     },
     {
       fullName: 'Helpdesk Agent Two',
-      empId: 'EMP-HD-002',
+      empId: '10003',
       email: 'helpdesk2@tmshospital.com',
       phone: '9000000002',
       password: helpdeskPwd,
       role: Role.HELPDESK,
-      departmentId: deptByCode['IT']._id,
+      deptCode: 'IT',
     },
     {
       fullName: 'Dr. Cardiology HOD',
-      empId: 'EMP-HOD-001',
+      empId: '10004',
       email: 'hod.cardio@tmshospital.com',
       phone: '9000000003',
       password: hodPwd,
       role: Role.HOD,
-      departmentId: deptByCode['CARDIO']._id,
+      deptCode: 'CARDIO',
     },
     {
       fullName: 'Dr. Radiology HOD',
-      empId: 'EMP-HOD-002',
+      empId: '10005',
       email: 'hod.radio@tmshospital.com',
       phone: '9000000004',
       password: hodPwd,
       role: Role.HOD,
-      departmentId: deptByCode['RADIO']._id,
+      deptCode: 'RADIO',
     },
     {
       fullName: 'Nurse Anita Patel',
-      empId: 'EMP-REQ-001',
+      empId: '10006',
       email: 'anita.patel@tmshospital.com',
       phone: '9000000007',
       password: requesterPwd,
       role: Role.REQUESTER,
-      departmentId: deptByCode['NURS']._id,
+      deptCode: 'NURS',
     },
     {
       fullName: 'Dr. Arjun Mehta',
-      empId: 'EMP-REQ-002',
+      empId: '10007',
       email: 'arjun.mehta@tmshospital.com',
       phone: '9000000008',
       password: requesterPwd,
       role: Role.REQUESTER,
-      departmentId: deptByCode['CARDIO']._id,
+      deptCode: 'CARDIO',
     },
     {
       fullName: 'Pharmacist Sunita Rao',
-      empId: 'EMP-REQ-003',
+      empId: '10008',
       email: 'sunita.rao@tmshospital.com',
       phone: '9000000009',
       password: requesterPwd,
       role: Role.REQUESTER,
-      departmentId: deptByCode['PHARMA']._id,
+      deptCode: 'PHARMA',
     },
   ];
+
+  const deptCodesWithNamedUser = new Set(namedUserSpecs.map((s) => s.deptCode));
+  const AUTO_EMP_ID_START = 10009;
+  const autoRequesterSpecs = DEPARTMENTS.filter((d) => !deptCodesWithNamedUser.has(d.code)).map((d, idx) => ({
+    fullName: `${d.name} Coordinator`,
+    empId: String(AUTO_EMP_ID_START + idx).padStart(5, '0'),
+    email: `coordinator.${d.code.toLowerCase()}@tmshospital.com`,
+    phone: `9100${String(10000 + idx).slice(-4)}`,
+    password: requesterPwd,
+    role: Role.REQUESTER,
+    deptCode: d.code,
+  }));
+
+  const allUserSpecs = [...namedUserSpecs, ...autoRequesterSpecs];
+  const usersData = allUserSpecs.map(({ deptCode, ...rest }) => ({
+    ...rest,
+    departmentId: deptByCode[deptCode]._id,
+  }));
 
   const users = await User.insertMany(usersData);
   const userByRole = (role) => users.filter((u) => u.role === role);
@@ -395,6 +434,72 @@ const seed = async () => {
       locIdx: 8,
       createdDaysAgo: 2,
     },
+    {
+      title: 'Ventilator preventive maintenance due',
+      description: 'Biomed team needs to complete scheduled PM on ICU ventilators.',
+      priority: Priority.MEDIUM,
+      status: TicketStatus.OPEN,
+      categoryCode: 'BIO',
+      subCode: 'BIO-VENT',
+      deptCode: 'BIOENG',
+      locIdx: 4,
+      createdDaysAgo: 1,
+    },
+    {
+      title: 'Patient monitor network dropouts',
+      description: 'Central monitoring station loses telemetry from beds 3–6 intermittently.',
+      priority: Priority.HIGH,
+      status: TicketStatus.IN_PROGRESS,
+      categoryCode: 'NET',
+      subCode: 'NET-LAN',
+      deptCode: 'ICU',
+      locIdx: 4,
+      createdDaysAgo: 0,
+    },
+    {
+      title: 'Chemo suite fridge temperature alert',
+      description: 'Oncology cold-chain fridge reporting high temperature warnings.',
+      priority: Priority.CRITICAL,
+      status: TicketStatus.ASSIGNED,
+      categoryCode: 'FAC',
+      subCode: 'FAC-HVAC',
+      deptCode: 'ONCO',
+      locIdx: 2,
+      createdDaysAgo: 1,
+    },
+    {
+      title: 'Ultrasound probe intermittent failure',
+      description: 'OBGYN ultrasound probe disconnects during scans.',
+      priority: Priority.HIGH,
+      status: TicketStatus.OPEN,
+      categoryCode: 'BIO',
+      subCode: 'BIO-US',
+      deptCode: 'OBGYN',
+      locIdx: 1,
+      createdDaysAgo: 2,
+    },
+    {
+      title: 'EHR downtime drill documentation',
+      description: 'Medical records needs IT support for scheduled downtime communications.',
+      priority: Priority.LOW,
+      status: TicketStatus.ON_HOLD,
+      categoryCode: 'SW',
+      subCode: 'SW-HIS',
+      deptCode: 'MEDREC',
+      locIdx: 8,
+      createdDaysAgo: 6,
+    },
+    {
+      title: 'Spill cleanup cart restock',
+      description: 'Housekeeping requests restock of spill kits on pediatric floor.',
+      priority: Priority.LOW,
+      status: TicketStatus.RESOLVED,
+      categoryCode: 'FAC',
+      subCode: 'FAC-HKEP',
+      deptCode: 'HKEEP',
+      locIdx: 0,
+      createdDaysAgo: 4,
+    },
   ];
 
   const catByCode = Object.fromEntries(categoryDocs.map((c) => [c.code, c]));
@@ -504,8 +609,11 @@ const seed = async () => {
   console.log(`Users         : ${users.length}`);
   console.log(`Tickets       : ${createdTickets.length}`);
   console.log('\nAdmin login:');
-  console.log(`  empId    : EMP-ADMIN-001`);
+  console.log(`  empId    : 10001`);
   console.log(`  password : ${process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345'}`);
+  } finally {
+    await mongoose.disconnect();
+  }
 };
 
 seed()

@@ -653,7 +653,7 @@ See `credition.txt` for all seeded users (empId + password).
 
 | Field | Value |
 |---|---|
-| Employee ID | `EMP-ADMIN-001` |
+| Employee ID | `10001` |
 | Password | `Admin@12345` |
 
 > These can be customized via the `SEED_ADMIN_*` environment variables before seeding.
