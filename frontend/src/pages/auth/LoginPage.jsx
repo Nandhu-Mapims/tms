@@ -31,7 +31,7 @@ function LoginPage() {
 
   const validateForm = () => {
     const nextErrors = {
-      empId: validateRequired(formState.empId, 'Employee ID'),
+      empId: validateFiveDigitEmpId(formState.empId),
       password: validateMinLength(formState.password, 8, 'Password'),
     };
 
