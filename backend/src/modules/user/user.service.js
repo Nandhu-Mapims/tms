@@ -44,12 +44,17 @@ const ensureDepartmentExists = async (departmentId) => {
   if (!exists) throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected department does not exist');
 };
 
-const getAssignableUsers = async () => {
+const getAssignableUsers = async (excludeUserId = null) => {
   const users = await User.find({ isActive: true, role: { $in: ASSIGNABLE_ROLES } })
     .select('fullName email role')
     .sort({ fullName: 1 })
     .lean();
-  return users.map((u) => ({ id: u._id.toString(), fullName: u.fullName, email: u.email, role: u.role }));
+  const mapped = users.map((u) => ({ id: u._id.toString(), fullName: u.fullName, email: u.email, role: u.role }));
+  const exclude = excludeUserId != null && String(excludeUserId).trim() ? String(excludeUserId).trim() : null;
+  if (!exclude) {
+    return mapped;
+  }
+  return mapped.filter((row) => String(row.id) !== exclude);
 };
 
 const getUsers = async (query = {}) => {

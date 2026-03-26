@@ -18,4 +18,6 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN,
   clientUrl: process.env.CLIENT_URL,
   bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS) || 10,
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
 };

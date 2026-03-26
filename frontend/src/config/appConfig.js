@@ -26,10 +26,24 @@ export const NAV_ITEMS = [
     roles: ['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER'],
   },
   {
+    key: 'hod-tickets',
+    label: 'HOD Tickets',
+    icon: 'bi-briefcase',
+    path: '/hod-to-hod-tickets',
+    roles: ['HOD'],
+  },
+  {
     key: 'transfer-requests',
     label: 'Transfer Requests',
     icon: 'bi-arrow-repeat',
     path: '/transfer-requests',
+    roles: ['HELPDESK'],
+  },
+  {
+    key: 'leadership-assignments',
+    label: 'Leadership Assignments',
+    icon: 'bi-person-badge',
+    path: '/leadership-assignments',
     roles: ['HELPDESK'],
   },
   {

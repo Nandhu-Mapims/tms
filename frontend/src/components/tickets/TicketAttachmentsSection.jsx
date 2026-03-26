@@ -24,7 +24,7 @@ const FILE_ACCEPT = [
   '.webp',
 ].join(',');
 
-function TicketAttachmentsSection({ attachments, onUpload, isUploading }) {
+function TicketAttachmentsSection({ attachments, onUpload, isUploading, canUpload = true }) {
   const [file, setFile] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState(null);
@@ -64,28 +64,34 @@ function TicketAttachmentsSection({ attachments, onUpload, isUploading }) {
           <span className="badge text-bg-light">{attachments.length}</span>
         </div>
 
-        <form onSubmit={handleSubmit} className="row g-3 align-items-end mb-4" noValidate>
-          <div className="col-12 col-md-8">
-            <label className="form-label">Upload Attachment</label>
-            <input
-              type="file"
-              accept={FILE_ACCEPT}
-              className={`form-control ${errorMessage ? 'is-invalid' : ''}`}
-              onChange={(event) => {
-                const nextFile = event.target.files?.[0] ?? null;
-                setFile(nextFile);
-                setErrorMessage(validateFile(nextFile, { allowedTypes: ALLOWED_TYPES }));
-              }}
-            />
-            {errorMessage ? <div className="invalid-feedback">{errorMessage}</div> : null}
-            <div className="form-text">Allowed: PDF, Word, text, JPG, PNG, WEBP up to 10MB.</div>
+        {canUpload ? (
+          <form onSubmit={handleSubmit} className="row g-3 align-items-end mb-4" noValidate>
+            <div className="col-12 col-md-8">
+              <label className="form-label">Upload attachment or image (optional)</label>
+              <input
+                type="file"
+                accept={FILE_ACCEPT}
+                className={`form-control ${errorMessage ? 'is-invalid' : ''}`}
+                onChange={(event) => {
+                  const nextFile = event.target.files?.[0] ?? null;
+                  setFile(nextFile);
+                  setErrorMessage(validateFile(nextFile, { allowedTypes: ALLOWED_TYPES }));
+                }}
+              />
+              {errorMessage ? <div className="invalid-feedback">{errorMessage}</div> : null}
+              <div className="form-text">Optional. Allowed: PDF, Word, text, JPG, PNG, WEBP up to 10MB.</div>
+            </div>
+            <div className="col-12 col-md-4">
+              <button type="submit" className="btn btn-outline-primary w-100" disabled={isUploading}>
+                {isUploading ? 'Uploading...' : 'Upload'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="border rounded-4 p-3 mb-4 text-secondary small">
+            File uploads are available only to the <strong>assigned helpdesk agent</strong> (and leadership roles).
           </div>
-          <div className="col-12 col-md-4">
-            <button type="submit" className="btn btn-outline-primary w-100" disabled={isUploading}>
-              {isUploading ? 'Uploading...' : 'Upload'}
-            </button>
-          </div>
-        </form>
+        )}
 
         <div className="list-group list-group-flush">
           {attachments.length ? attachments.map((attachment) => (

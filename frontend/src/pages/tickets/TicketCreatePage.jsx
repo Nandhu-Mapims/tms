@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/common/PageHeader.jsx';
 import TicketForm from '../../components/tickets/TicketForm.jsx';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { createTicketRequest } from '../../services/ticketService';
+import { getDepartments } from '../../services/masterDataService';
 import { getErrorMessage } from '../../utils/getErrorMessage';
-import { validateFile, validateRequired } from '../../utils/validators';
+import { validateFiles, validateRequired } from '../../utils/validators';
 
 const initialFormState = {
   prompt: '',
-  attachment: null,
+  departmentId: '',
+  attachments: [],
 };
 
 const ALLOWED_ATTACHMENT_TYPES = [
@@ -30,7 +32,32 @@ function TicketCreatePage() {
   const [formState, setFormState] = useState(initialFormState);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDepartmentsLoading, setIsDepartmentsLoading] = useState(true);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
   const [pageError, setPageError] = useState('');
+
+  useEffect(() => {
+    let isCancelled = false;
+    const loadDepartments = async () => {
+      setIsDepartmentsLoading(true);
+      try {
+        const response = await getDepartments({ isActive: true });
+        if (isCancelled) return;
+        setDepartmentOptions(Array.isArray(response?.data) ? response.data : []);
+      } catch (error) {
+        if (isCancelled) return;
+        const message = getErrorMessage(error, 'Unable to load departments.');
+        setPageError(message);
+        toast.error(message);
+      } finally {
+        if (!isCancelled) setIsDepartmentsLoading(false);
+      }
+    };
+    loadDepartments();
+    return () => {
+      isCancelled = true;
+    };
+  }, [toast]);
 
   const handleChange = (name, value) => {
     setFormState((prev) => ({
@@ -43,7 +70,8 @@ function TicketCreatePage() {
   const validateForm = () => {
     const nextErrors = {
       prompt: validateRequired(formState.prompt, 'Issue details'),
-      attachment: validateFile(formState.attachment, { allowedTypes: ALLOWED_ATTACHMENT_TYPES }),
+      departmentId: validateRequired(formState.departmentId, 'Send to department'),
+      attachment: validateFiles(formState.attachments, { allowedTypes: ALLOWED_ATTACHMENT_TYPES }),
     };
 
     Object.keys(nextErrors).forEach((key) => {
@@ -71,7 +99,8 @@ function TicketCreatePage() {
       const payload = {
         prompt: formState.prompt.trim(),
         description: formState.prompt.trim(),
-        attachment: formState.attachment,
+        departmentId: formState.departmentId,
+        attachments: formState.attachments,
       };
 
       const response = await createTicketRequest(payload);
@@ -112,13 +141,21 @@ function TicketCreatePage() {
       <TicketForm
         formState={formState}
         errors={errors}
+        departmentOptions={departmentOptions}
         onChange={handleChange}
-        onFileChange={(file) => {
-          setFormState((prev) => ({ ...prev, attachment: file }));
+        onFileChange={(files) => {
+          setFormState((prev) => ({ ...prev, attachments: [...(prev.attachments ?? []), ...(files ?? [])] }));
+          setErrors((prev) => ({ ...prev, attachment: '' }));
+        }}
+        onRemoveFile={(indexToRemove) => {
+          setFormState((prev) => ({
+            ...prev,
+            attachments: prev.attachments.filter((_, index) => index !== indexToRemove),
+          }));
           setErrors((prev) => ({ ...prev, attachment: '' }));
         }}
         onSubmit={handleSubmit}
-        isSubmitting={isSubmitting}
+        isSubmitting={isSubmitting || isDepartmentsLoading}
       />
     </>
   );

@@ -1,7 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { APP_NAME, APP_SUBTITLE, NAV_ITEMS } from '../../config/appConfig';
 import { useAuth } from '../../hooks/useAuth';
-import SidebarAssignmentNotices from './SidebarAssignmentNotices.jsx';
 
 function Sidebar() {
   const { user } = useAuth();
@@ -24,7 +23,7 @@ function Sidebar() {
 
   return (
     <aside className="app-sidebar d-flex flex-column p-3 border-end bg-white">
-      <div className="d-flex align-items-center gap-3 mb-4 pb-3 border-bottom">
+      <div className="d-flex align-items-center gap-3 mb-4 pb-3 border-bottom flex-shrink-0">
         <div className="sidebar-logo shadow-sm">
           <img src="/hospital-mark.svg" alt="Hospital logo" width="28" height="28" />
         </div>
@@ -34,8 +33,8 @@ function Sidebar() {
         </div>
       </div>
 
-      <div className="small text-uppercase text-secondary fw-semibold mb-2">Navigation</div>
-      <nav className="nav flex-column gap-2 app-nav-scroll">
+      <div className="small text-uppercase text-secondary fw-semibold mb-2 flex-shrink-0">Navigation</div>
+      <nav className="nav flex-column gap-2 app-sidebar-nav">
         {navigationItems.map((item) => (
           <NavLink
             key={item.key}
@@ -52,7 +51,7 @@ function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <SidebarAssignmentNotices />
+
     </aside>
   );
 }

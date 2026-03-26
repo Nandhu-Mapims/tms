@@ -12,6 +12,30 @@ const getIdString = (value) => {
 };
 
 const ensureCanViewTicket = (user, ticket) => {
+  if (user?.role === Role.HELPDESK) {
+    const userDepartmentId = getIdString(user?.departmentId);
+    const ticketDepartmentId = getIdString(ticket?.departmentId);
+    if (!userDepartmentId) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
+    }
+    if (ticketDepartmentId && ticketDepartmentId === userDepartmentId) {
+      return;
+    }
+    throw new ApiError(StatusCodes.FORBIDDEN, 'You can view only tickets routed to your department');
+  }
+
+  if (user?.role === Role.HOD) {
+    const userDepartmentId = getIdString(user?.departmentId);
+    const ticketDepartmentId = getIdString(ticket?.departmentId);
+    if (!userDepartmentId) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
+    }
+    if (ticketDepartmentId && ticketDepartmentId === userDepartmentId) {
+      return;
+    }
+    throw new ApiError(StatusCodes.FORBIDDEN, 'You can view only tickets routed to your department');
+  }
+
   if (STAFF_VIEW_ROLES.includes(user.role)) {
     return;
   }
@@ -29,6 +53,35 @@ const ensureCanViewTicket = (user, ticket) => {
   }
 
   throw new ApiError(StatusCodes.FORBIDDEN, 'You do not have permission to view this ticket');
+};
+
+/** Helpdesk may view any ticket but only the assigned agent may post chat or attachments. */
+const ensureCanPostTicketThread = (user, ticket) => {
+  if ([Role.ADMIN, Role.HOD].includes(user?.role)) {
+    return;
+  }
+
+  const userId = getIdString(user?.id);
+  const requesterId = getIdString(ticket?.requesterId);
+  const assignedToId = getIdString(ticket?.assignedToId);
+
+  if (user.role === Role.REQUESTER && requesterId === userId) {
+    return;
+  }
+
+  if (user.role === Role.HELPDESK) {
+    if (!assignedToId) {
+      return;
+    }
+    if (assignedToId === userId) {
+      return;
+    }
+  }
+
+  throw new ApiError(
+    StatusCodes.FORBIDDEN,
+    'Only the assigned helpdesk agent can add messages or attachments. Request a transfer if you need to handle this ticket.',
+  );
 };
 
 const getTicketForAccess = async (ticketId, user) => {
@@ -51,5 +104,6 @@ const getTicketForAccess = async (ticketId, user) => {
 
 module.exports = {
   ensureCanViewTicket,
+  ensureCanPostTicketThread,
   getTicketForAccess,
 };

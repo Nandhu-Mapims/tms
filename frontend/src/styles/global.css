@@ -251,6 +251,16 @@ body {
   overflow: auto;
 }
 
+.app-sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-notice-kv-label {
+  width: 5.5rem;
+}
+
 @media (max-width: 991.98px) {
   .app-shell {
     display: block;

@@ -4,10 +4,14 @@ function TicketFilters({
   filters,
   categories,
   departments,
+  userRole = '',
   onChange,
   onApply,
   onReset,
 }) {
+  const isAdmin = String(userRole ?? '') === 'ADMIN';
+  const handlingDepartmentLabel = isAdmin ? 'Handling Department' : 'Department';
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     onChange(name, value);
@@ -62,7 +66,7 @@ function TicketFilters({
             </select>
           </div>
           <div className="col-6 col-xl-2">
-            <label className="form-label">Department</label>
+            <label className="form-label">{handlingDepartmentLabel}</label>
             <select className="form-select" name="departmentId" value={filters.departmentId} onChange={handleChange}>
               <option value="">All</option>
               {departments.map((department) => (
@@ -72,6 +76,24 @@ function TicketFilters({
               ))}
             </select>
           </div>
+          {isAdmin ? (
+            <div className="col-6 col-xl-2">
+              <label className="form-label">Requester Department</label>
+              <select
+                className="form-select"
+                name="requesterDepartmentId"
+                value={filters.requesterDepartmentId ?? ''}
+                onChange={handleChange}
+              >
+                <option value="">All</option>
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="col-6 col-xl-2">
             <label className="form-label">Overdue</label>
             <select className="form-select" name="isOverdue" value={filters.isOverdue} onChange={handleChange}>

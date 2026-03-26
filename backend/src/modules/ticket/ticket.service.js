@@ -4,10 +4,11 @@ const { StatusCodes } = require('http-status-codes');
 
 const ApiError = require('../../utils/ApiError');
 const parsePagination = require('../../utils/parsePagination');
-const { Role, Priority, TicketStatus } = require('../../models/enums');
+const { Role, Priority, TicketStatus, TransferRequestStatus } = require('../../models/enums');
 const { STAFF_VIEW_ROLES, STAFF_ACTION_ROLES, ESCALATION_ROLES } = require('./ticket.constants');
 const { createActivityLog } = require('./ticketActivity.service');
 const { ensureCanViewTicket } = require('./ticket.shared');
+const { env: appEnv } = require('../../config');
 
 const Department = require('../../models/Department.model');
 const Category = require('../../models/Category.model');
@@ -15,6 +16,8 @@ const Subcategory = require('../../models/Subcategory.model');
 const Location = require('../../models/Location.model');
 const User = require('../../models/User.model');
 const Ticket = require('../../models/Ticket.model');
+const TicketTransferRequest = require('../../models/TicketTransferRequest.model');
+const { expireStalePendingTransferRequests } = require('./ticketTransferRequest.expiry');
 
 const ASSIGNABLE_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD];
 const TRANSFER_TARGET_ROLES = [Role.HELPDESK];
@@ -96,18 +99,19 @@ const generateTicketNumber = async (categoryCode) => {
   return buildTicketNumber({ categoryCode, year, runningNumber: count + 1 });
 };
 
-const validateMasterLinks = async ({ departmentId, categoryId, subcategoryId, locationId }) => {
+const validateMasterLinks = async ({ departmentId, categoryId, subcategoryId, locationId, locationRequired = true }) => {
   const [department, category, subcategory, location] = await Promise.all([
     Department.findOne({ _id: departmentId, isActive: true }).lean(),
     Category.findOne({ _id: categoryId, isActive: true }).lean(),
     Subcategory.findOne({ _id: subcategoryId, isActive: true }).lean(),
-    Location.findOne({ _id: locationId, isActive: true }).lean(),
+    locationId ? Location.findOne({ _id: locationId, isActive: true }).lean() : Promise.resolve(null),
   ]);
 
   if (!department) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid department selected');
   if (!category) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid category selected');
   if (!subcategory) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid subcategory selected');
-  if (!location) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid location selected');
+  if (locationRequired && !locationId) throw new ApiError(StatusCodes.BAD_REQUEST, 'Location is required for hardware tickets');
+  if (locationId && !location) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid location selected');
 
   return { department, category, subcategory, location };
 };
@@ -141,6 +145,257 @@ const pickBestByPrompt = (items, prompt, projector) => {
   return scored[0]?.item ?? safeItems[0];
 };
 
+const normalizeLookupText = (value) =>
+  String(value ?? '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const buildCodeToken = (value, fallback = 'GEN') => {
+  const cleaned = String(value ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 8);
+  return cleaned || fallback;
+};
+
+const createUniqueCategoryCode = async (label) => {
+  const base = `AI-${buildCodeToken(label, 'CAT')}`;
+  for (let index = 0; index < 100; index += 1) {
+    const suffix = String(index + 1).padStart(2, '0');
+    const candidate = `${base}-${suffix}`;
+    const exists = await Category.exists({ code: candidate });
+    if (!exists) return candidate;
+  }
+  throw new ApiError(StatusCodes.CONFLICT, 'Unable to generate a unique category code');
+};
+
+const createUniqueSubcategoryCode = async (label) => {
+  const base = `AI-${buildCodeToken(label, 'SUB')}`;
+  for (let index = 0; index < 100; index += 1) {
+    const suffix = String(index + 1).padStart(2, '0');
+    const candidate = `${base}-${suffix}`;
+    const exists = await Subcategory.exists({ code: candidate });
+    if (!exists) return candidate;
+  }
+  throw new ApiError(StatusCodes.CONFLICT, 'Unable to generate a unique subcategory code');
+};
+
+const ensureCategoryByAiName = async (aiCategory, categories) => {
+  const wanted = normalizeLookupText(aiCategory);
+  const existingList = Array.isArray(categories) ? categories : [];
+  const exact = existingList.find((item) => {
+    const nameMatch = normalizeLookupText(item?.name) === wanted;
+    const codeMatch = normalizeLookupText(item?.code) === wanted;
+    return nameMatch || codeMatch;
+  });
+  if (exact) return exact;
+
+  const fuzzy = existingList.find((item) => {
+    const normalizedName = normalizeLookupText(item?.name);
+    return normalizedName && wanted && (normalizedName.includes(wanted) || wanted.includes(normalizedName));
+  });
+  if (fuzzy) return fuzzy;
+
+  const code = await createUniqueCategoryCode(aiCategory);
+  const created = await Category.create({
+    name: String(aiCategory).trim(),
+    code,
+    description: 'Auto-created by AI classification',
+    isActive: true,
+  });
+  return created.toObject();
+};
+
+const ensureSubcategoryByAiName = async (aiSubcategory, categoryId, subcategories) => {
+  const wanted = normalizeLookupText(aiSubcategory);
+  const currentCategoryId = String(categoryId ?? '');
+  const existingList = Array.isArray(subcategories) ? subcategories : [];
+  const exact = existingList.find((item) => {
+    const sameCategory = String(item?.categoryId ?? '') === currentCategoryId;
+    const nameMatch = normalizeLookupText(item?.name) === wanted;
+    const codeMatch = normalizeLookupText(item?.code) === wanted;
+    return sameCategory && (nameMatch || codeMatch);
+  });
+  if (exact) return exact;
+
+  const fuzzy = existingList.find((item) => {
+    const sameCategory = String(item?.categoryId ?? '') === currentCategoryId;
+    if (!sameCategory) return false;
+    const normalizedName = normalizeLookupText(item?.name);
+    return normalizedName && wanted && (normalizedName.includes(wanted) || wanted.includes(normalizedName));
+  });
+  if (fuzzy) return fuzzy;
+
+  const code = await createUniqueSubcategoryCode(aiSubcategory);
+  const created = await Subcategory.create({
+    name: String(aiSubcategory).trim(),
+    code,
+    description: 'Auto-created by AI classification',
+    isActive: true,
+    categoryId,
+  });
+  return created.toObject();
+};
+
+const extractLocationTextFromPrompt = (prompt) => {
+  const raw = String(prompt ?? '').trim();
+  if (!raw) return null;
+
+  // Remove telecom/number tokens before trying to find location so we don't capture too much.
+  const text = removeTelecomTokensFromText(raw) ?? raw;
+
+  // 1) If prompt contains explicit "location of / at / in ..." take only until a likely boundary.
+  const boundaryTokens = '(?:\\btelecom\\b|\\btel\\b|\\bext\\b|\\bnumber\\b|\\bcontact\\b|[\\n.;,!?]|$)';
+  const patterns = [
+    new RegExp(String.raw`in\\s+the\\s+location\\s+of\\s+(.+?)\\s*${boundaryTokens}`, 'i'),
+    new RegExp(String.raw`location(?:\\s+of)?\\s+(.+?)\\s*${boundaryTokens}`, 'i'),
+    new RegExp(String.raw`\\bat\\s+(.+?)\\s*${boundaryTokens}`, 'i'),
+    new RegExp(String.raw`\\bin\\s+(.+?)\\s*${boundaryTokens}`, 'i'),
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const candidate = String(match?.[1] ?? '').trim().replace(/[.,;:!?]+$/g, '');
+    if (candidate.length >= 3) return candidate.slice(0, 160);
+  }
+
+  // 2) Ward-based extraction: prefer "qualifier ward ... room/no/number ..." snippets.
+  // Example: "ot ward 1 room no 34", "opthal ward 1 room no 34"
+  const wardPattern = /\b([a-z0-9]+)\s+ward\b.{0,90}(?:\s*(?:room|no|number)\s*[^.,;:!?\\n]+)?/i;
+  const wardMatch = text.match(wardPattern);
+  let candidate = String(wardMatch?.[0] ?? '').trim();
+
+  if (!candidate) {
+    // Fallback: grab a small window around the first "ward".
+    const lower = text.toLowerCase();
+    const idx = lower.indexOf('ward');
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 18);
+      const end = Math.min(text.length, idx + 120);
+      candidate = text.slice(start, end).trim();
+    }
+  }
+
+  if (candidate) {
+    // Trim trailing filler like "also ..." when there is no explicit room/number after it.
+    candidate = candidate.replace(/\\balso\\b[\\s\\S]*$/i, '').trim();
+    candidate = candidate.replace(/^[\\s,.;:!?]+/g, '').trim();
+    candidate = candidate.replace(/[.,;:!?]+$/g, '').trim();
+  }
+
+  if (candidate.length >= 3) return candidate.slice(0, 160);
+  return null;
+};
+
+const extractTelecomFromText = (textValue) => {
+  const text = String(textValue ?? '');
+  if (!text.trim()) return null;
+
+  const labeled = text.match(/\b(?:telecom|tel(?:ephone)?|ext(?:ension)?)\s*[:\-]?\s*(\d{4,10})\b/i);
+  if (labeled?.[1]) return labeled[1];
+
+  const numberIs = text.match(/\b(?:my\s+)?number\s*(?:is|:)\s*(\d{4,10})\b/i);
+  if (numberIs?.[1]) return numberIs[1];
+
+  const generic = text.match(/\b(\d{5,10})\b/);
+  return generic?.[1] ?? null;
+};
+
+const removeTelecomTokensFromText = (textValue) => {
+  const text = String(textValue ?? '');
+  if (!text.trim()) return null;
+  const cleaned = text
+    .replace(/\b(?:telecom|tel(?:ephone)?|ext(?:ension)?)\s*[:\-]?\s*\d{4,10}\b/gi, '')
+    .replace(/\b(?:my\s+)?number\s*(?:is|:)\s*\d{4,10}\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .replace(/[.,;:!?]+$/g, '');
+  return cleaned || null;
+};
+
+const normalizeTelecomNumber = (value) => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D+/g, '');
+  if (digits.length < 4 || digits.length > 10) return null;
+  return digits;
+};
+
+const inferIssueType = (prompt, aiIssueType = null) => {
+  const issueType = String(aiIssueType ?? '').trim().toUpperCase();
+  if (issueType === 'HARDWARE' || issueType === 'SOFTWARE') return issueType;
+
+  const text = String(prompt ?? '').toLowerCase();
+  const hardwareKeywords = ['hardware', 'device', 'monitor', 'printer', 'keyboard', 'mouse', 'scanner', 'cpu', 'laptop', 'pc', 'network switch', 'router', 'infusion', 'pump', 'biomedical'];
+  const softwareKeywords = ['software', 'app', 'application', 'login', 'password', 'error', 'bug', 'crash', 'his', 'emr', 'portal', 'system'];
+  if (hasKeyword(text, hardwareKeywords)) return 'HARDWARE';
+  if (hasKeyword(text, softwareKeywords)) return 'SOFTWARE';
+  return 'UNKNOWN';
+};
+
+const parseGeminiJsonResponse = (rawText) => {
+  const text = String(rawText ?? '').trim();
+  if (!text) return null;
+  const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const source = fencedMatch?.[1] ? fencedMatch[1].trim() : text;
+  try {
+    return JSON.parse(source);
+  } catch {
+    return null;
+  }
+};
+
+const inferClassificationWithGemini = async ({ prompt, departments, categories, subcategories, locations }) => {
+  const apiKey = String(appEnv?.geminiApiKey ?? '').trim();
+  if (!apiKey) return null;
+
+  const model = String(appEnv?.geminiModel ?? 'gemini-1.5-flash').trim();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const payload = {
+    contents: [
+      {
+        parts: [
+          {
+            text: [
+              'Classify this hospital ticket. Return JSON only.',
+              'Valid priorities: LOW, MEDIUM, HIGH, CRITICAL.',
+              'Issue types: HARDWARE, SOFTWARE, UNKNOWN.',
+              `Prompt: ${prompt}`,
+              `Departments: ${departments.map((d) => `${d.name} (${d.code})`).join(', ')}`,
+              `Categories: ${categories.map((c) => `${c.name} (${c.code})`).join(', ')}`,
+              `Subcategories: ${subcategories.map((s) => `${s.name} (${s.code})`).join(', ')}`,
+              `Locations: ${locations.map((l) => `${l.block ?? ''}/${l.floor ?? ''}/${l.ward ?? ''}/${l.room ?? ''}`).join(', ')}`,
+              'Also extract telecom/extension number from prompt if present.',
+              'Response shape: {"department":"...","category":"...","subcategory":"...","priority":"...","issueType":"...","location":"... or null","telecomNumber":"... or null"}',
+            ].join('\n'),
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) return null;
+    const json = await response.json();
+    const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    return parseGeminiJsonResponse(raw);
+  } catch {
+    return null;
+  }
+};
+
 const inferTicketClassification = async (prompt) => {
   const [departments, categories, subcategories, locations] = await Promise.all([
     Department.find({ isActive: true }).select('_id name code').lean(),
@@ -149,37 +404,145 @@ const inferTicketClassification = async (prompt) => {
     Location.find({ isActive: true }).select('_id block floor ward room unit').lean(),
   ]);
 
-  if (!departments.length || !categories.length || !subcategories.length || !locations.length) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'Master data is incomplete. Please configure departments, categories, subcategories, and locations.');
+  if (!departments.length || !categories.length || !subcategories.length) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Master data is incomplete. Please configure departments, categories, and subcategories.');
   }
 
-  const category = pickBestByPrompt(categories, prompt, (item) => `${item?.name ?? ''} ${item?.code ?? ''}`);
-  const eligibleSubcategories = subcategories.filter((item) => String(item?.categoryId ?? '') === String(category?._id ?? ''));
-  const subcategory = pickBestByPrompt(
-    eligibleSubcategories.length ? eligibleSubcategories : subcategories,
-    prompt,
-    (item) => `${item?.name ?? ''} ${item?.code ?? ''}`,
+  const ai = await inferClassificationWithGemini({ prompt, departments, categories, subcategories, locations });
+  if (!ai) {
+    throw new ApiError(StatusCodes.SERVICE_UNAVAILABLE, 'AI classification is temporarily unavailable. Please try again.');
+  }
+
+  const aiDepartment = String(ai?.department ?? '').trim();
+  const aiCategory = String(ai?.category ?? '').trim();
+  const aiSubcategory = String(ai?.subcategory ?? '').trim();
+  const aiLocation = String(ai?.location ?? '').trim();
+  const aiTelecomRaw = ai?.telecomNumber ?? ai?.telecom ?? ai?.contactNumber ?? null;
+  const aiTelecomNumber = normalizeTelecomNumber(aiTelecomRaw);
+  const aiPriority = String(ai?.priority ?? '').trim().toUpperCase();
+  const aiIssueType = String(ai?.issueType ?? '').trim().toUpperCase();
+
+  if (!aiDepartment || !aiCategory || !aiSubcategory || !aiPriority || !aiIssueType) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'AI response is incomplete. Please rephrase your issue details and retry.');
+  }
+  if (!Object.values(Priority).includes(aiPriority)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'AI could not infer a valid priority. Please retry.');
+  }
+  if (!['HARDWARE', 'SOFTWARE', 'UNKNOWN'].includes(aiIssueType)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'AI could not infer a valid issue type. Please retry.');
+  }
+
+  const department = pickBestByPrompt(departments, aiDepartment, (item) => `${item?.name ?? ''} ${item?.code ?? ''}`);
+  let issueType = aiIssueType;
+
+  const categoryProjector = (item) => `${item?.name ?? ''} ${item?.code ?? ''}`.trim();
+  const subcategoryProjector = (item) => `${item?.name ?? ''} ${item?.code ?? ''}`.trim();
+
+  // Conservative override: if the user text clearly looks like SOFTWARE, do not classify category as HARDWARE.
+  // This prevents cases like "my software is not working" being mapped to HW-DESK by Gemini.
+  const hintIssueType = inferIssueType(prompt, null);
+  const softwareCategoryCandidates = categories.filter(
+    (c) => String(c?.code ?? '').trim().toUpperCase() === 'SW' || String(c?.name ?? '').trim().toUpperCase() === 'SOFTWARE',
   );
-  const department = pickBestByPrompt(departments, prompt, (item) => `${item?.name ?? ''} ${item?.code ?? ''}`);
-  const location = pickBestByPrompt(locations, prompt, (item) => `${item?.block ?? ''} ${item?.floor ?? ''} ${item?.ward ?? ''} ${item?.room ?? ''} ${item?.unit ?? ''}`);
+
+  let category = await ensureCategoryByAiName(aiCategory, categories);
+  if (hintIssueType === 'SOFTWARE' && issueType !== 'SOFTWARE' && softwareCategoryCandidates.length) {
+    category = pickBestByPrompt(softwareCategoryCandidates, prompt, categoryProjector) ?? category;
+    issueType = 'SOFTWARE';
+  }
+
+  let subcategory = await ensureSubcategoryByAiName(aiSubcategory, category?._id, subcategories);
+  if (issueType === 'SOFTWARE' && String(category?.code ?? '').toUpperCase() === 'SW') {
+    const softwareSubcategories = subcategories.filter((item) => String(item?.categoryId ?? '') === String(category?._id ?? ''));
+    const bestSoftwareSubcategory = pickBestByPrompt(softwareSubcategories, prompt, subcategoryProjector);
+    if (bestSoftwareSubcategory) {
+      subcategory = bestSoftwareSubcategory;
+    }
+  }
+
+  const location = aiLocation
+    ? pickBestByPrompt(
+        locations,
+        aiLocation,
+        (item) => `${item?.block ?? ''} ${item?.floor ?? ''} ${item?.ward ?? ''} ${item?.room ?? ''} ${item?.unit ?? ''}`,
+      )
+    : null;
+  const locationText = removeTelecomTokensFromText(aiLocation || extractLocationTextFromPrompt(prompt));
+  const telecomNumber = aiTelecomNumber || extractTelecomFromText(prompt);
+  const priority = aiPriority;
 
   return {
     departmentId: department?._id,
     categoryId: category?._id,
     subcategoryId: subcategory?._id,
-    locationId: location?._id,
-    priority: inferPriorityFromPrompt(prompt),
+    locationId: location?._id ?? null,
+    locationText: locationText || null,
+    telecomNumber: telecomNumber || null,
+    priority,
+    issueType,
+    // If AI's location doesn't match any Location record, ignore it (do not block ticket creation).
+    locationRequired: issueType === 'HARDWARE' && Boolean(location),
   };
 };
 
 const populateTicket = (query) =>
   query
     .populate({ path: 'departmentId', select: 'name code' })
+    .populate({ path: 'requesterDepartmentId', select: 'name code' })
     .populate({ path: 'categoryId', select: 'name code' })
     .populate({ path: 'subcategoryId', select: 'name code categoryId' })
     .populate({ path: 'locationId', select: 'block floor ward room unit' })
     .populate({ path: 'requesterId', select: 'fullName email phone role' })
     .populate({ path: 'assignedToId', select: 'fullName email phone role' });
+
+const formatUserBriefForTransfer = (u) => {
+  if (!u) return null;
+  const id = u._id?.toString?.() ?? String(u);
+  return {
+    id,
+    fullName: u.fullName ?? '',
+    email: u.email ?? null,
+    role: u.role ?? null,
+  };
+};
+
+const shapePendingTransferDocsForClient = (docs, user) => {
+  const userId = String(user?.id ?? '');
+  const list = Array.isArray(docs) ? docs : [];
+  return list.map((doc) => ({
+    id: doc._id.toString(),
+    status: doc.status,
+    requestedNote: doc.requestedNote ?? null,
+    requesterId: String(doc.requesterId?._id ?? doc.requesterId ?? ''),
+    targetAgentId: String(doc.targetAgentId?._id ?? doc.targetAgentId ?? ''),
+    isOutgoing: String(doc.requesterId?._id ?? doc.requesterId) === userId,
+    isIncoming: String(doc.targetAgentId?._id ?? doc.targetAgentId) === userId,
+    requester: formatUserBriefForTransfer(doc.requesterId),
+    targetAgent: formatUserBriefForTransfer(doc.targetAgentId),
+  }));
+};
+
+const loadPendingTransfersByTicketId = async (ticketMongoIds) => {
+  const ids = Array.isArray(ticketMongoIds) ? ticketMongoIds.filter(Boolean) : [];
+  if (!ids.length) return new Map();
+
+  const docs = await TicketTransferRequest.find({
+    ticketId: { $in: ids },
+    status: TransferRequestStatus.PENDING,
+  })
+    .populate({ path: 'requesterId', select: 'fullName email role' })
+    .populate({ path: 'targetAgentId', select: 'fullName email role' })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  const map = new Map();
+  for (const doc of docs) {
+    const key = String(doc.ticketId);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(doc);
+  }
+  return map;
+};
 
 const shapeTicket = (ticket) => {
   const t = ticket?.toObject ? ticket.toObject() : ticket;
@@ -188,12 +551,15 @@ const shapeTicket = (ticket) => {
     id: t?._id?.toString?.() ?? t?.id,
     status: normalizeStatus(t?.status),
     department: t?.departmentId ?? null,
+    requesterDepartment: t?.requesterDepartmentId ?? null,
     category: t?.categoryId ?? null,
     subcategory: t?.subcategoryId ?? null,
     location: t?.locationId ?? null,
+    locationText: t?.locationText ?? null,
     requester: t?.requesterId ?? null,
     assignedTo: t?.assignedToId ?? null,
     departmentId: t?.departmentId?._id?.toString?.() ?? t?.departmentId,
+    requesterDepartmentId: t?.requesterDepartmentId?._id?.toString?.() ?? t?.requesterDepartmentId,
     categoryId: t?.categoryId?._id?.toString?.() ?? t?.categoryId,
     subcategoryId: t?.subcategoryId?._id?.toString?.() ?? t?.subcategoryId,
     locationId: t?.locationId?._id?.toString?.() ?? t?.locationId,
@@ -230,6 +596,19 @@ const getTicketLeanOrThrow = async (identifier) => {
 const buildScopedWhere = (user) => {
   const where = {};
   if (user.role === Role.REQUESTER) where.requesterId = toObjectId(user.id, 'userId');
+  if (user.role === Role.HELPDESK) {
+    if (!user?.departmentId) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
+    }
+    where.departmentId = toObjectId(user.departmentId, 'helpdeskDepartmentId');
+  }
+  if (user.role === Role.HOD) {
+    if (!user?.departmentId) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
+    }
+    // HOD sees tickets routed to their department.
+    where.departmentId = toObjectId(user.departmentId, 'hodDepartmentId');
+  }
   return where;
 };
 
@@ -241,22 +620,41 @@ const createTicket = async (payload, user) => {
   const prompt = normalizeText(payload?.prompt) || normalizeText(payload?.description) || normalizeText(payload?.title);
   const title = normalizeText(payload?.title) || (prompt ? prompt.slice(0, 120) : null);
   const description = normalizeText(payload?.description) || prompt || null;
-  const telecomNumber = normalizeText(payload?.telecomNumber) || null;
+  const telecomNumber = normalizeText(payload?.telecomNumber) || extractTelecomFromText(prompt) || null;
   const providedPriority = payload?.priority;
 
   if (!title) throw new ApiError(StatusCodes.BAD_REQUEST, 'title is required');
   if (!description) throw new ApiError(StatusCodes.BAD_REQUEST, 'prompt is required');
 
-  const hasManualClassification = Boolean(payload?.departmentId && payload?.categoryId && payload?.subcategoryId && payload?.locationId && providedPriority);
+  const hasManualClassification = Boolean(payload?.departmentId && payload?.categoryId && payload?.subcategoryId && providedPriority);
+  const manualIssueType = inferIssueType(prompt, payload?.issueType);
   const inferred = hasManualClassification
     ? {
         departmentId: toObjectId(payload?.departmentId, 'departmentId'),
         categoryId: toObjectId(payload?.categoryId, 'categoryId'),
         subcategoryId: toObjectId(payload?.subcategoryId, 'subcategoryId'),
-        locationId: toObjectId(payload?.locationId, 'locationId'),
+        locationId: payload?.locationId ? toObjectId(payload?.locationId, 'locationId') : null,
+        locationText: removeTelecomTokensFromText(payload?.locationText),
+        telecomNumber: normalizeText(payload?.telecomNumber) || extractTelecomFromText(prompt) || null,
         priority: providedPriority,
+        issueType: manualIssueType,
+        locationRequired: manualIssueType === 'HARDWARE' && Boolean(payload?.locationId),
+        // locationText already normalized above; keep only one key to avoid overwrite.
       }
     : await inferTicketClassification(prompt);
+
+  // Requesters/HOD explicitly select target department to route ticket.
+  if (TICKET_CREATOR_ROLES.includes(user?.role)) {
+    if (!payload?.departmentId) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'departmentId is required');
+    }
+    inferred.departmentId = toObjectId(payload.departmentId, 'departmentId');
+  }
+
+  // Capture requester's department separately from the routed "send to" department.
+  if (!user?.departmentId) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Your account has no department assigned. Please contact admin.');
+  }
 
   validatePriority(inferred.priority);
 
@@ -265,9 +663,36 @@ const createTicket = async (payload, user) => {
     categoryId: inferred.categoryId,
     subcategoryId: inferred.subcategoryId,
     locationId: inferred.locationId,
+    locationRequired: inferred.locationRequired === true,
   });
 
   const ticketNumber = await generateTicketNumber(category.code ?? 'GEN');
+  const creatorUserId = toObjectId(user.id, 'userId');
+  const requesterDepartmentId = toObjectId(user.departmentId, 'requesterDepartmentId');
+  let assignedToIdForCreate = null;
+
+  if (user.role === Role.HOD) {
+    const targetDepartmentId = toObjectId(inferred.departmentId, 'departmentId');
+    const isSameDepartment = String(targetDepartmentId) === String(requesterDepartmentId);
+
+    if (isSameDepartment) {
+      assignedToIdForCreate = creatorUserId;
+    } else {
+      const targetHod = await User.findOne({
+        role: Role.HOD,
+        isActive: true,
+        departmentId: targetDepartmentId,
+      })
+        .select('_id')
+        .lean();
+
+      if (!targetHod?._id) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, 'No active HOD found in the selected department for direct assignment');
+      }
+
+      assignedToIdForCreate = targetHod._id;
+    }
+  }
 
   const ticket = await Ticket.create({
     ticketNumber,
@@ -276,12 +701,15 @@ const createTicket = async (payload, user) => {
     priority: inferred.priority,
     status: TicketStatus.OPEN,
     departmentId: inferred.departmentId,
+    requesterDepartmentId,
     categoryId: inferred.categoryId,
     subcategoryId: inferred.subcategoryId,
     locationId: inferred.locationId,
-    requesterId: toObjectId(user.id, 'userId'),
-    assignedToId: null,
-    telecomNumber,
+    locationText: inferred.locationText ?? null,
+    requesterId: creatorUserId,
+    // Direct assignment: HOD-created tickets are assigned to target department HOD.
+    assignedToId: assignedToIdForCreate,
+    telecomNumber: inferred.telecomNumber ?? telecomNumber,
   });
 
   await createActivityLog(null, {
@@ -289,7 +717,7 @@ const createTicket = async (payload, user) => {
     userId: user.id,
     action: 'CREATED',
     newValue: ticket.status,
-    remarks: 'Ticket created',
+    remarks: user.role === Role.HOD ? 'Ticket created and directly assigned to department HOD' : 'Ticket created',
   });
 
   const full = await populateTicket(Ticket.findById(ticket._id)).lean();
@@ -297,6 +725,8 @@ const createTicket = async (payload, user) => {
 };
 
 const getTickets = async (query, user) => {
+  await expireStalePendingTransferRequests();
+
   const { page, limit, skip } = parsePagination(query);
   const where = buildScopedWhere(user);
 
@@ -305,11 +735,54 @@ const getTickets = async (query, user) => {
   }
 
   if (query?.departmentId) {
-    where.departmentId = toObjectId(query.departmentId, 'departmentId');
+    const normalizedDepartmentId = toObjectId(query.departmentId, 'departmentId');
+    const hasHodOrHelpdeskSpecialRoleFilters = Boolean(query?.requesterRole || query?.assignedRole);
+
+    if ([Role.HOD, Role.HELPDESK].includes(user?.role) && !hasHodOrHelpdeskSpecialRoleFilters) {
+      // On general Tickets screens, "Department" filter means requester department.
+      where.requesterDepartmentId = normalizedDepartmentId;
+    } else {
+      // On special HOD/Helpdesk views (e.g., HOD-to-HOD), "Department" filter means routed/send-to department.
+      where.departmentId = normalizedDepartmentId;
+    }
+  }
+
+  if (query?.requesterDepartmentId) {
+    where.requesterDepartmentId = toObjectId(query.requesterDepartmentId, 'requesterDepartmentId');
   }
 
   if (query?.assignedToId) {
     where.assignedToId = toObjectId(query.assignedToId, 'assignedToId');
+  }
+
+  if (query?.requesterRole && [Role.HOD, Role.ADMIN].includes(user?.role)) {
+    const normalizedRequesterRole = String(query.requesterRole ?? '').trim().toUpperCase();
+    if (![Role.HOD].includes(normalizedRequesterRole)) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid requesterRole supplied');
+    }
+
+    const requesterUsersWhere = { role: normalizedRequesterRole, isActive: true };
+
+    const requesterUsers = await User.find(requesterUsersWhere).select('_id').lean();
+    const requesterIds = requesterUsers.map((u) => u._id).filter(Boolean);
+    where.requesterId = requesterIds.length ? { $in: requesterIds } : { $in: [] };
+  }
+
+  if (query?.assignedRole && [Role.HOD, Role.ADMIN].includes(user?.role)) {
+    const normalizedAssignedRole = String(query.assignedRole ?? '').trim().toUpperCase();
+    if (![Role.HOD].includes(normalizedAssignedRole)) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid assignedRole supplied');
+    }
+
+    const assignedUsersWhere = { role: normalizedAssignedRole, isActive: true };
+    if (where.departmentId) {
+      // Lock to the same routed department scope (ticket.departmentId).
+      assignedUsersWhere.departmentId = where.departmentId;
+    }
+
+    const assignedUsers = await User.find(assignedUsersWhere).select('_id').lean();
+    const assignedIds = assignedUsers.map((u) => u._id).filter(Boolean);
+    where.assignedToId = assignedIds.length ? { $in: assignedIds } : { $in: [] };
   }
 
   const isOverdue = parseBooleanFilter(query?.isOverdue);
@@ -347,38 +820,136 @@ const getTickets = async (query, user) => {
     where.$or = [{ ticketNumber: { $regex: term, $options: 'i' } }, { title: { $regex: term, $options: 'i' } }];
   }
 
+  const excludePendingHandoff = parseBooleanFilter(query?.excludePendingHandoff) === true;
+  if (excludePendingHandoff && where.assignedToId) {
+    const assigneeFilterId = where.assignedToId;
+    const pendingOffered = await TicketTransferRequest.find({
+      requesterId: assigneeFilterId,
+      status: TransferRequestStatus.PENDING,
+    })
+      .select('ticketId')
+      .lean();
+    const candidateIds = pendingOffered.map((row) => row.ticketId).filter(Boolean);
+    if (candidateIds.length) {
+      const ticketIdsToExclude = await Ticket.find({
+        _id: { $in: candidateIds },
+        assignedToId: assigneeFilterId,
+      }).distinct('_id');
+      if (ticketIdsToExclude.length) {
+        where._id = { $nin: ticketIdsToExclude };
+      }
+    }
+  }
+
   const [items, total] = await Promise.all([
     populateTicket(Ticket.find(where).sort({ createdAt: -1 }).skip(skip).limit(limit)).lean(),
     Ticket.countDocuments(where),
   ]);
 
+  const pendingByTicket = await loadPendingTransfersByTicketId(items.map((row) => row._id));
+
   return {
-    items: items.map(shapeTicket),
+    items: items.map((row) => {
+      const shaped = shapeTicket(row);
+      const pendingDocs = pendingByTicket.get(String(row._id)) ?? [];
+      return {
+        ...shaped,
+        transferRequestsPending: shapePendingTransferDocsForClient(pendingDocs, user),
+      };
+    }),
     meta: { page, limit, total, count: items.length, totalPages: Math.max(1, Math.ceil(total / limit)) },
   };
 };
 
 const getTicketById = async (id, user) => {
+  await expireStalePendingTransferRequests();
+
   const ticket = await getTicketLeanOrThrow(id);
   ensureCanViewTicket(user, ticket);
-  return shapeTicket(ticket);
+  const pendingByTicket = await loadPendingTransfersByTicketId([ticket._id]);
+  const pendingDocs = pendingByTicket.get(String(ticket._id)) ?? [];
+  return {
+    ...shapeTicket(ticket),
+    transferRequestsPending: shapePendingTransferDocsForClient(pendingDocs, user),
+  };
 };
 
 const updateTicket = async (id, payload, user) => {
   const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
-  ensureAssigneeOrStaff(user, ticket);
+  const isRequester = user?.role === Role.REQUESTER;
+  const isTicketRequester = String(ticket?.requesterId ?? '') === String(user?.id ?? '');
+
+  if (isRequester) {
+    if (!isTicketRequester) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'You can edit only your own ticket');
+    }
+    if (ticket?.status !== TicketStatus.OPEN) {
+      throw new ApiError(StatusCodes.CONFLICT, 'You can edit request details only while ticket is OPEN');
+    }
+  } else {
+    ensureAssigneeOrStaff(user, ticket);
+  }
 
   const updates = {};
-  if (payload?.title !== undefined) updates.title = normalizeText(payload.title);
-  if (payload?.description !== undefined) updates.description = normalizeText(payload.description) || null;
+  if (!isRequester && payload?.title !== undefined) updates.title = normalizeText(payload.title);
+  if (!isRequester && payload?.description !== undefined) updates.description = normalizeText(payload.description) ?? null;
   if (payload?.priority !== undefined) {
     validatePriority(payload.priority);
     updates.priority = payload.priority;
   }
 
+  const hasCategoryPatch = payload?.categoryId !== undefined || payload?.subcategoryId !== undefined;
+  if (hasCategoryPatch) {
+    const nextCategoryId = toObjectId(payload?.categoryId ?? ticket?.categoryId, 'categoryId');
+    const nextSubcategoryId = toObjectId(payload?.subcategoryId ?? ticket?.subcategoryId, 'subcategoryId');
+
+    const [category, subcategory] = await Promise.all([
+      Category.findOne({ _id: nextCategoryId, isActive: true }).lean(),
+      Subcategory.findOne({ _id: nextSubcategoryId, isActive: true }).lean(),
+    ]);
+
+    if (!category) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid category selected');
+    if (!subcategory || String(subcategory?.categoryId ?? '') !== String(nextCategoryId)) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid subcategory selected for the chosen category');
+    }
+
+    updates.categoryId = nextCategoryId;
+    updates.subcategoryId = nextSubcategoryId;
+  }
+
+  if (payload?.locationId !== undefined) {
+    const normalizedLocationId = String(payload?.locationId ?? '').trim();
+    if (!normalizedLocationId) {
+      updates.locationId = null;
+    } else {
+      const nextLocationId = toObjectId(normalizedLocationId, 'locationId');
+      const location = await Location.findOne({ _id: nextLocationId, isActive: true }).lean();
+      if (!location) throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid location selected');
+      updates.locationId = nextLocationId;
+    }
+  }
+
+  if (payload?.locationText !== undefined) {
+    updates.locationText = removeTelecomTokensFromText(payload?.locationText) ?? null;
+  }
+
+  if (payload?.telecomNumber !== undefined) {
+    updates.telecomNumber = normalizeTelecomNumber(payload?.telecomNumber) ?? null;
+  }
+
+  if (!Object.keys(updates).length) {
+    const fullCurrent = await populateTicket(Ticket.findById(ticket._id)).lean();
+    return shapeTicket(fullCurrent);
+  }
+
   const updated = await Ticket.findByIdAndUpdate(ticket._id, updates, { new: true, runValidators: true });
-  await createActivityLog(null, { ticketId: updated._id, userId: user.id, action: 'UPDATED', remarks: 'Ticket updated' });
+  await createActivityLog(null, {
+    ticketId: updated._id,
+    userId: user.id,
+    action: 'UPDATED',
+    remarks: isRequester ? 'Requester updated ticket details during OPEN stage' : 'Ticket updated',
+  });
   const full = await populateTicket(Ticket.findById(updated._id)).lean();
   return shapeTicket(full);
 };
@@ -446,6 +1017,40 @@ const claimTicket = async (id, user) => {
   return shapeTicket(full);
 };
 
+const cancelRequesterTicket = async (id, user) => {
+  if (user?.role !== Role.REQUESTER) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Only requesters can cancel their own ticket');
+  }
+
+  const ticket = await getTicketDocOrThrow(id);
+  ensureCanViewTicket(user, ticket);
+
+  if (String(ticket?.requesterId ?? '') !== String(user?.id ?? '')) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'You can cancel only your own ticket');
+  }
+
+  if (![TicketStatus.NEW, TicketStatus.OPEN].includes(ticket.status)) {
+    throw new ApiError(StatusCodes.CONFLICT, 'Request can only be cancelled while ticket is in opening stage');
+  }
+
+  const oldStatus = ticket.status;
+  ticket.status = TicketStatus.CANCELLED;
+  ticket.cancelledAt = new Date();
+  await ticket.save();
+
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'CANCELLED',
+    oldValue: oldStatus,
+    newValue: ticket.status,
+    remarks: 'Cancelled by requester during opening stage',
+  });
+
+  const full = await populateTicket(Ticket.findById(ticket._id)).lean();
+  return shapeTicket(full);
+};
+
 const transferTicket = async (id, payload, user) => {
   ensureStaffAccess(user);
 
@@ -465,8 +1070,14 @@ const transferTicket = async (id, payload, user) => {
 
   const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
-  if (user.role === Role.HELPDESK) {
+  const skipAssigneeCheck = payload?.fromTransferApproval === true;
+  if (user.role === Role.HELPDESK && !skipAssigneeCheck) {
     ensureAssignedToUser(user, ticket);
+  }
+
+  const currentAssigneeId = ticket.assignedToId?.toString?.() ?? '';
+  if (currentAssigneeId && currentAssigneeId === String(assignee._id)) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'This ticket is already assigned to that agent. Choose someone else.');
   }
 
   const oldAssigneeId = ticket.assignedToId?.toString?.() ?? null;
@@ -655,6 +1266,7 @@ module.exports = {
   updateTicket,
   updateStatus,
   claimTicket,
+  cancelRequesterTicket,
   transferTicket,
   resolveTicket,
   closeTicket,

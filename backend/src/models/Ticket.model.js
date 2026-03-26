@@ -12,9 +12,13 @@ const ticketSchema = new mongoose.Schema(
     isOverdue: { type: Boolean, default: false },
 
     departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
+    /** Department of the user who raised the ticket (requester department). */
+    requesterDepartmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
     categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     subcategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subcategory', required: true },
-    locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', required: true },
+    locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
+    /** Raw location text inferred from prompt (even if it doesn't match a Location DB row). */
+    locationText: { type: String, default: null },
     requesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     assignedToId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     telecomNumber: { type: String, default: null },

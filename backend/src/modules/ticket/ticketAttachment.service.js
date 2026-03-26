@@ -2,7 +2,7 @@ const path = require('path');
 const ApiError = require('../../utils/ApiError');
 const { StatusCodes } = require('http-status-codes');
 const { createActivityLog } = require('./ticketActivity.service');
-const { getTicketForAccess } = require('./ticket.shared');
+const { getTicketForAccess, ensureCanPostTicketThread } = require('./ticket.shared');
 const TicketAttachment = require('../../models/TicketAttachment.model');
 const User = require('../../models/User.model');
 
@@ -12,6 +12,7 @@ const addAttachment = async (ticketId, file, user) => {
   }
 
   const ticket = await getTicketForAccess(ticketId, user);
+  ensureCanPostTicketThread(user, ticket);
 
   const attachment = await TicketAttachment.create({
     ticketId: ticket._id,

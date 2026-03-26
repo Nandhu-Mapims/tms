@@ -1,8 +1,7 @@
 /**
- * MongoDB seed script — clears all collections and seeds realistic hospital data.
+ * Fresh MongoDB seed script for TMS.
  * Run: npm run seed
  */
-
 require('dotenv').config();
 
 const mongoose = require('mongoose');
@@ -19,13 +18,10 @@ const Ticket = require('./models/Ticket.model');
 const TicketComment = require('./models/TicketComment.model');
 const TicketAttachment = require('./models/TicketAttachment.model');
 const TicketActivityLog = require('./models/TicketActivityLog.model');
+const TicketTransferRequest = require('./models/TicketTransferRequest.model');
 
 const MONGO_URI = process.env.MONGODB_URI ?? 'mongodb://localhost:27017/tms_hospital';
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS ?? 10);
-
-// ---------------------------------------------------------------------------
-// Seed data definitions
-// ---------------------------------------------------------------------------
 
 const SLA_CONFIGS = [
   { priority: Priority.LOW, firstResponseMinutes: 240, resolutionMinutes: 2880, escalationMinutes: 2160 },
@@ -35,134 +31,268 @@ const SLA_CONFIGS = [
 ];
 
 const DEPARTMENTS = [
-  { name: 'Information Technology', code: 'IT', description: 'IT infrastructure and support' },
-  { name: 'Biomedical Engineering', code: 'BIOENG', description: 'Medical device maintenance and calibration' },
-  { name: 'Cardiology', code: 'CARDIO', description: 'Heart and cardiovascular care' },
-  { name: 'Radiology', code: 'RADIO', description: 'Imaging and diagnostics' },
-  { name: 'Emergency', code: 'ER', description: 'Emergency and trauma care' },
-  { name: 'Intensive Care', code: 'ICU', description: 'Critical care units' },
-  { name: 'Administration', code: 'ADMIN', description: 'Hospital administration' },
-  { name: 'Pharmacy', code: 'PHARMA', description: 'Pharmacy and dispensing' },
-  { name: 'Laboratory', code: 'LAB', description: 'Pathology and diagnostics lab' },
-  { name: 'Nursing', code: 'NURS', description: 'Nursing and ward management' },
-  { name: 'Pediatrics', code: 'PEDIA', description: 'Child and adolescent care' },
-  { name: 'Orthopedics', code: 'ORTHO', description: 'Bone, joint, and musculoskeletal care' },
-  { name: 'Neurology', code: 'NEURO', description: 'Brain and nervous system care' },
-  { name: 'Oncology', code: 'ONCO', description: 'Cancer care and chemotherapy' },
-  { name: 'General Surgery', code: 'SURG', description: 'Surgical services and operating theatres' },
-  { name: 'Anesthesia', code: 'ANES', description: 'Anesthesia and perioperative care' },
-  { name: 'Obstetrics & Gynecology', code: 'OBGYN', description: "Maternity and women's health" },
-  { name: 'Psychiatry', code: 'PSYCH', description: 'Mental health services' },
-  { name: 'ENT', code: 'ENT', description: 'Ear, nose, and throat' },
-  { name: 'Ophthalmology', code: 'OPHTH', description: 'Eye care' },
-  { name: 'Dermatology', code: 'DERM', description: 'Skin and dermatologic care' },
-  { name: 'Physiotherapy', code: 'PHYST', description: 'Rehabilitation and physical therapy' },
-  { name: 'Nutrition & Dietetics', code: 'DIET', description: 'Clinical nutrition' },
-  { name: 'Medical Records', code: 'MEDREC', description: 'Health information management' },
-  { name: 'Human Resources', code: 'HR', description: 'Staffing and HR operations' },
-  { name: 'Finance & Billing', code: 'FIN', description: 'Billing, insurance, and finance' },
-  { name: 'Security', code: 'SEC', description: 'Hospital security and access control' },
-  { name: 'Housekeeping', code: 'HKEEP', description: 'Environmental and cleaning services' },
+  { name: 'Information Technology', code: 'IT', description: 'IT and digital systems support' },
+  { name: 'Biomedical Engineering', code: 'BIOENG', description: 'Biomedical equipment support' },
+  { name: 'Facilities', code: 'FAC', description: 'Electrical, plumbing, and facility operations' },
+  { name: 'Nursing', code: 'NURS', description: 'Nursing operations and ward coordination' },
+  { name: 'Pharmacy', code: 'PHARMA', description: 'Pharmacy dispensing and inventory support' },
 ];
 
-const CATEGORIES_WITH_SUBS = [
+const CATEGORIES = [
   {
     name: 'Hardware',
     code: 'HW',
-    description: 'Physical hardware issues',
+    description: 'Physical device issues',
     subcategories: [
       { name: 'Desktop / Workstation', code: 'HW-DESK' },
-      { name: 'Laptop', code: 'HW-LAPT' },
-      { name: 'Printer / Scanner', code: 'HW-PRNT' },
-      { name: 'Medical Device', code: 'HW-MDEV' },
-      { name: 'Network Equipment', code: 'HW-NET' },
+      { name: 'Printer / Scanner', code: 'HW-PRN' },
+      { name: 'Medical Device', code: 'HW-MED' },
     ],
   },
   {
     name: 'Software',
     code: 'SW',
-    description: 'Application and OS issues',
+    description: 'Applications and systems',
     subcategories: [
       { name: 'HIS / EMR', code: 'SW-HIS' },
-      { name: 'Operating System', code: 'SW-OS' },
+      { name: 'Login / Access', code: 'SW-LOGIN' },
       { name: 'Email / Communication', code: 'SW-MAIL' },
-      { name: 'Antivirus / Security', code: 'SW-SEC' },
-    ],
-  },
-  {
-    name: 'Network',
-    code: 'NET',
-    description: 'Connectivity and network issues',
-    subcategories: [
-      { name: 'Internet / WAN', code: 'NET-WAN' },
-      { name: 'LAN / Switch', code: 'NET-LAN' },
-      { name: 'Wi-Fi', code: 'NET-WIFI' },
-      { name: 'VPN', code: 'NET-VPN' },
     ],
   },
   {
     name: 'Facilities',
     code: 'FAC',
-    description: 'Building and facility maintenance',
+    description: 'Building and utility issues',
     subcategories: [
       { name: 'Electrical', code: 'FAC-ELEC' },
-      { name: 'Plumbing', code: 'FAC-PLMB' },
-      { name: 'HVAC / AC', code: 'FAC-HVAC' },
-      { name: 'Housekeeping', code: 'FAC-HKEP' },
-    ],
-  },
-  {
-    name: 'Biomedical',
-    code: 'BIO',
-    description: 'Biomedical equipment service',
-    subcategories: [
-      { name: 'Ventilator', code: 'BIO-VENT' },
-      { name: 'ECG Machine', code: 'BIO-ECG' },
-      { name: 'Infusion Pump', code: 'BIO-PUMP' },
-      { name: 'Ultrasound', code: 'BIO-US' },
+      { name: 'Air Conditioning', code: 'FAC-AC' },
+      { name: 'Housekeeping', code: 'FAC-HKP' },
     ],
   },
 ];
 
 const LOCATIONS = [
   { block: 'A', floor: 'Ground', ward: 'OPD', room: 'A-G-01' },
-  { block: 'A', floor: 'Ground', ward: 'OPD', room: 'A-G-02' },
-  { block: 'A', floor: '1st', ward: 'Cardiology', room: 'A-1-10' },
-  { block: 'B', floor: 'Ground', ward: 'Emergency', room: 'B-G-ER' },
-  { block: 'B', floor: '2nd', ward: 'ICU', room: 'B-2-ICU' },
-  { block: 'C', floor: 'Ground', ward: 'Radiology', room: 'C-G-RAD' },
-  { block: 'C', floor: '1st', ward: 'Lab', room: 'C-1-LAB' },
-  { block: 'D', floor: 'Ground', ward: 'Pharmacy', room: 'D-G-PH' },
-  { block: 'D', floor: '1st', ward: 'Admin', room: 'D-1-ADM' },
-  { block: 'Server Room', floor: 'Basement', ward: null, room: 'SR-B-01' },
+  { block: 'A', floor: '1st', ward: 'ICU', room: 'A-1-ICU' },
+  { block: 'B', floor: '2nd', ward: 'Radiology', room: 'B-2-RAD' },
+  { block: 'C', floor: 'Ground', ward: 'Pharmacy', room: 'C-G-PH' },
+  { block: 'D', floor: '1st', ward: 'OT', room: 'D-1-OT-04' },
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const USER_SPECS = [
+  { fullName: 'System Administrator', empId: '10001', email: 'admin@tmshospital.com', role: Role.ADMIN, deptCode: 'IT', pwdKey: 'ADMIN' },
+  { fullName: 'IT Helpdesk Agent', empId: '10002', email: 'helpdesk.it@tmshospital.com', role: Role.HELPDESK, deptCode: 'IT', pwdKey: 'HELPDESK' },
+  { fullName: 'IT Helpdesk Agent Two', empId: '10011', email: 'helpdesk2.it@tmshospital.com', role: Role.HELPDESK, deptCode: 'IT', pwdKey: 'HELPDESK' },
+  { fullName: 'Biomedical Helpdesk Agent', empId: '10003', email: 'helpdesk.bio@tmshospital.com', role: Role.HELPDESK, deptCode: 'BIOENG', pwdKey: 'HELPDESK' },
+  { fullName: 'Biomedical Helpdesk Agent Two', empId: '10012', email: 'helpdesk2.bio@tmshospital.com', role: Role.HELPDESK, deptCode: 'BIOENG', pwdKey: 'HELPDESK' },
+  { fullName: 'Facilities Helpdesk Agent', empId: '10004', email: 'helpdesk.fac@tmshospital.com', role: Role.HELPDESK, deptCode: 'FAC', pwdKey: 'HELPDESK' },
+  { fullName: 'Facilities Helpdesk Agent Two', empId: '10013', email: 'helpdesk2.fac@tmshospital.com', role: Role.HELPDESK, deptCode: 'FAC', pwdKey: 'HELPDESK' },
+  { fullName: 'IT HOD', empId: '10005', email: 'hod.it@tmshospital.com', role: Role.HOD, deptCode: 'IT', pwdKey: 'HOD' },
+  { fullName: 'Nursing HOD', empId: '10006', email: 'hod.nursing@tmshospital.com', role: Role.HOD, deptCode: 'NURS', pwdKey: 'HOD' },
+  { fullName: 'Pharmacy HOD', empId: '10007', email: 'hod.pharmacy@tmshospital.com', role: Role.HOD, deptCode: 'PHARMA', pwdKey: 'HOD' },
+  { fullName: 'Requester One', empId: '10014', email: 'requester.one@tmshospital.com', role: Role.REQUESTER, deptCode: 'NURS', pwdKey: 'REQUESTER' },
+  { fullName: 'Requester Two', empId: '10015', email: 'requester.two@tmshospital.com', role: Role.REQUESTER, deptCode: 'PHARMA', pwdKey: 'REQUESTER' },
+  { fullName: 'Requester Three', empId: '10016', email: 'requester.three@tmshospital.com', role: Role.REQUESTER, deptCode: 'IT', pwdKey: 'REQUESTER' },
+];
 
-const hash = (pwd) => bcrypt.hash(pwd, SALT_ROUNDS);
-
-const randomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-const daysAgo = (n) => new Date(Date.now() - n * 86400000);
+const TICKET_SPECS = [
+  {
+    title: 'Nurse station printer not working',
+    description: 'Printer is showing paper jam error continuously.',
+    categoryCode: 'HW',
+    subcategoryCode: 'HW-PRN',
+    departmentCode: 'IT',
+    priority: Priority.HIGH,
+    status: TicketStatus.OPEN,
+    requesterEmpId: '10016',
+    assigneeEmpId: null,
+    locationIndex: 0,
+    telecomNumber: '6883',
+    locationText: 'opthal ward 1 room no 34',
+  },
+  {
+    title: 'Infusion pump alarm issue',
+    description: 'Infusion pump keeps alarm beeping after calibration.',
+    categoryCode: 'HW',
+    subcategoryCode: 'HW-MED',
+    departmentCode: 'BIOENG',
+    priority: Priority.CRITICAL,
+    status: TicketStatus.ASSIGNED,
+    requesterEmpId: '10015',
+    assigneeEmpId: '10003',
+    locationIndex: 1,
+    telecomNumber: '7001',
+    locationText: 'icu bed side',
+  },
+  {
+    title: 'OT AC cooling failure',
+    description: 'AC in OT room is not cooling and temperature is rising.',
+    categoryCode: 'FAC',
+    subcategoryCode: 'FAC-AC',
+    departmentCode: 'FAC',
+    priority: Priority.HIGH,
+    status: TicketStatus.IN_PROGRESS,
+    requesterEmpId: '10005',
+    assigneeEmpId: '10004',
+    locationIndex: 4,
+    telecomNumber: '7440',
+    locationText: 'ot ward 1 room no 34',
+  },
+  {
+    title: 'HIS login failed for nursing staff',
+    description: 'Multiple users cannot login to HIS after shift change.',
+    categoryCode: 'SW',
+    subcategoryCode: 'SW-LOGIN',
+    departmentCode: 'IT',
+    priority: Priority.MEDIUM,
+    status: TicketStatus.RESOLVED,
+    requesterEmpId: '10005',
+    assigneeEmpId: '10002',
+    locationIndex: 2,
+    telecomNumber: '6110',
+    locationText: 'nursing station floor 2',
+  },
+  // Routed to IT but requested by other department (Requester + HOD variety)
+  {
+    title: 'HIS EMR showing stale data',
+    description: 'EMR dashboard shows stale information for the last 2 hours.',
+    categoryCode: 'SW',
+    subcategoryCode: 'SW-HIS',
+    departmentCode: 'IT',
+    priority: Priority.HIGH,
+    status: TicketStatus.OPEN,
+    requesterEmpId: '10014',
+    assigneeEmpId: null,
+    locationIndex: 0,
+    telecomNumber: '6700',
+    locationText: 'nurs ward 2 room no 12',
+  },
+  {
+    title: 'Internet dropouts in OPD',
+    description: 'Wi-Fi connection drops intermittently in OPD corridors.',
+    categoryCode: 'HW',
+    subcategoryCode: 'HW-PRN',
+    departmentCode: 'IT',
+    priority: Priority.CRITICAL,
+    status: TicketStatus.ASSIGNED,
+    requesterEmpId: '10006',
+    assigneeEmpId: '10002',
+    locationIndex: 2,
+    telecomNumber: '6123',
+    locationText: 'OPD ward room no 34',
+  },
+  {
+    title: 'Printer offline at pharmacy billing',
+    description: 'Billing label printer at pharmacy counters is repeatedly going offline.',
+    categoryCode: 'HW',
+    subcategoryCode: 'HW-PRN',
+    departmentCode: 'IT',
+    priority: Priority.LOW,
+    status: TicketStatus.IN_PROGRESS,
+    requesterEmpId: '10015',
+    assigneeEmpId: '10002',
+    locationIndex: 3,
+    telecomNumber: '6999',
+    locationText: 'pharmacy ward room no 05',
+  },
+  {
+    title: 'Security HOD ticket routing test',
+    description: 'Test ticket raised by a HOD from another department but routed to IT.',
+    categoryCode: 'SW',
+    subcategoryCode: 'SW-LOGIN',
+    departmentCode: 'IT',
+    priority: Priority.MEDIUM,
+    status: TicketStatus.OPEN,
+    requesterEmpId: '10007',
+    assigneeEmpId: null,
+    locationIndex: 1,
+    telecomNumber: '7222',
+    locationText: 'bioeng ward 1 room no 01',
+  },
+  // More cross-department examples for BIOENG/FAC
+  {
+    title: 'Desktop not responding in ICU',
+    description: 'Terminal in ICU is unresponsive and requires hard reset.',
+    categoryCode: 'HW',
+    subcategoryCode: 'HW-DESK',
+    departmentCode: 'BIOENG',
+    priority: Priority.HIGH,
+    status: TicketStatus.OPEN,
+    requesterEmpId: '10016',
+    assigneeEmpId: '10003',
+    locationIndex: 1,
+    telecomNumber: '7888',
+    locationText: 'ICU ward 1 room no 22',
+  },
+  {
+    title: 'OT housekeeping request',
+    description: 'Housekeeping team requested for OT post-procedure deep cleaning.',
+    categoryCode: 'FAC',
+    subcategoryCode: 'FAC-HKP',
+    departmentCode: 'FAC',
+    priority: Priority.LOW,
+    status: TicketStatus.RESOLVED,
+    requesterEmpId: '10015',
+    assigneeEmpId: '10004',
+    locationIndex: 4,
+    telecomNumber: '7007',
+    locationText: 'OT ward room no 10',
+  },
+  // HOD-managed tickets (assignee role = HOD) for the HOD-to-HOD menu.
+  {
+    title: 'HOD HOD managed: HIS stale data (routed to IT)',
+    description: 'HIS dashboard stale. HOD requested immediate investigation.',
+    categoryCode: 'SW',
+    subcategoryCode: 'SW-HIS',
+    departmentCode: 'IT',
+    priority: Priority.HIGH,
+    status: TicketStatus.ASSIGNED,
+    requesterEmpId: '10006', // Nursing HOD requested
+    assigneeEmpId: '10005', // IT HOD manages
+    locationIndex: 2,
+    telecomNumber: '6990',
+    locationText: 'NURS ward 2 room no 10',
+  },
+  {
+    title: 'HOD HOD managed: Login access problem (routed to IT)',
+    description: 'Login access failing for HOD staff after password rotation.',
+    categoryCode: 'SW',
+    subcategoryCode: 'SW-LOGIN',
+    departmentCode: 'IT',
+    priority: Priority.MEDIUM,
+    status: TicketStatus.OPEN,
+    requesterEmpId: '10007', // Pharmacy HOD requested
+    assigneeEmpId: '10005', // IT HOD manages
+    locationIndex: 1,
+    telecomNumber: '6991',
+    locationText: 'PHARMA ward room no 3',
+  },
+  {
+    title: 'HOD-managed: Printer issue (routed to NURS)',
+    description: 'Printer offline in nursing ward. Assigned to nursing HOD.',
+    categoryCode: 'HW',
+    subcategoryCode: 'HW-PRN',
+    departmentCode: 'NURS',
+    priority: Priority.LOW,
+    status: TicketStatus.IN_PROGRESS,
+    requesterEmpId: '10005', // IT HOD requested
+    assigneeEmpId: '10006', // Nursing HOD manages
+    locationIndex: 0,
+    telecomNumber: '6992',
+    locationText: 'OPD ward room no 1',
+  },
+];
 
 const buildTicketNumber = (categoryCode, index) => {
   const year = new Date().getUTCFullYear();
-  return `TKT-${categoryCode}-${year}-${String(index).padStart(4, '0')}`;
+  return `TKT-${categoryCode}-${year}-${String(index + 1).padStart(4, '0')}`;
 };
 
-// ---------------------------------------------------------------------------
-// Main seed
-// ---------------------------------------------------------------------------
+const hashWith = (plainText) => bcrypt.hash(plainText, SALT_ROUNDS);
 
-const seed = async () => {
-  try {
-  await mongoose.connect(MONGO_URI);
-  console.log('Connected to MongoDB:', MONGO_URI);
-
-  // Clear all collections
+const clearAllCollections = async () => {
   await Promise.all([
+    TicketTransferRequest.deleteMany({}),
     TicketActivityLog.deleteMany({}),
     TicketComment.deleteMany({}),
     TicketAttachment.deleteMany({}),
@@ -174,454 +304,120 @@ const seed = async () => {
     Location.deleteMany({}),
     SLAConfig.deleteMany({}),
   ]);
-  console.log('Cleared all collections');
+};
 
-  // SLA configs
+const seed = async () => {
+  await mongoose.connect(MONGO_URI);
+  console.log(`Connected to MongoDB: ${MONGO_URI}`);
+
+  await clearAllCollections();
+  console.log('Cleared existing data');
+
   await SLAConfig.insertMany(SLA_CONFIGS);
-  console.log('Seeded SLA configs');
-
-  // Departments
   const departments = await Department.insertMany(DEPARTMENTS);
-  const deptByCode = Object.fromEntries(departments.map((d) => [d.code, d]));
-  console.log(`Seeded ${departments.length} departments`);
+  const deptByCode = Object.fromEntries(departments.map((item) => [item.code, item]));
 
-  // Categories + Subcategories
-  const categoryDocs = [];
-  const subcategoryDocs = [];
-
-  for (const catDef of CATEGORIES_WITH_SUBS) {
-    const { subcategories, ...catData } = catDef;
-    const cat = await Category.create(catData);
-    categoryDocs.push(cat);
-
-    const subs = subcategories.map((s) => ({ ...s, categoryId: cat._id }));
-    const createdSubs = await Subcategory.insertMany(subs);
-    subcategoryDocs.push(...createdSubs);
+  const createdCategories = [];
+  const createdSubcategories = [];
+  for (const definition of CATEGORIES) {
+    const { subcategories, ...categoryData } = definition;
+    const category = await Category.create(categoryData);
+    createdCategories.push(category);
+    const subcategoryDocs = await Subcategory.insertMany(
+      subcategories.map((item) => ({ ...item, categoryId: category._id }))
+    );
+    createdSubcategories.push(...subcategoryDocs);
   }
-  console.log(`Seeded ${categoryDocs.length} categories, ${subcategoryDocs.length} subcategories`);
 
-  // Locations
   const locations = await Location.insertMany(LOCATIONS);
-  console.log(`Seeded ${locations.length} locations`);
+  const categoryByCode = Object.fromEntries(createdCategories.map((item) => [item.code, item]));
+  const subcategoryByCode = Object.fromEntries(createdSubcategories.map((item) => [item.code, item]));
 
-  // Users — named accounts plus one requester per department without a named user
-  const [adminPwd, helpdeskPwd, hodPwd, requesterPwd] = await Promise.all([
-    hash(process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345'),
-    hash('Helpdesk@12345'),
-    hash('Hod@12345'),
-    hash('User@12345'),
-  ]);
+  const passwords = {
+    ADMIN: process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345',
+    HELPDESK: process.env.SEED_HELPDESK_PASSWORD ?? 'Helpdesk@12345',
+    HOD: process.env.SEED_HOD_PASSWORD ?? 'Hod@12345',
+    REQUESTER: process.env.SEED_REQUESTER_PASSWORD ?? 'User@12345',
+  };
+  const passwordHashes = {
+    ADMIN: await hashWith(passwords.ADMIN),
+    HELPDESK: await hashWith(passwords.HELPDESK),
+    HOD: await hashWith(passwords.HOD),
+    REQUESTER: await hashWith(passwords.REQUESTER),
+  };
 
-  const namedUserSpecs = [
-    {
-      fullName: process.env.SEED_ADMIN_NAME ?? 'System Administrator',
-      empId: '10001',
-      email: process.env.SEED_ADMIN_EMAIL ?? 'admin@tmshospital.com',
-      phone: process.env.SEED_ADMIN_PHONE ?? '9999999999',
-      password: adminPwd,
-      role: Role.ADMIN,
-      deptCode: 'IT',
-    },
-    {
-      fullName: 'Helpdesk Agent One',
-      empId: '10002',
-      email: 'helpdesk1@tmshospital.com',
-      phone: '9000000001',
-      password: helpdeskPwd,
-      role: Role.HELPDESK,
-      deptCode: 'IT',
-    },
-    {
-      fullName: 'Helpdesk Agent Two',
-      empId: '10003',
-      email: 'helpdesk2@tmshospital.com',
-      phone: '9000000002',
-      password: helpdeskPwd,
-      role: Role.HELPDESK,
-      deptCode: 'IT',
-    },
-    {
-      fullName: 'Dr. Cardiology HOD',
-      empId: '10004',
-      email: 'hod.cardio@tmshospital.com',
-      phone: '9000000003',
-      password: hodPwd,
-      role: Role.HOD,
-      deptCode: 'CARDIO',
-    },
-    {
-      fullName: 'Dr. Radiology HOD',
-      empId: '10005',
-      email: 'hod.radio@tmshospital.com',
-      phone: '9000000004',
-      password: hodPwd,
-      role: Role.HOD,
-      deptCode: 'RADIO',
-    },
-    {
-      fullName: 'Nurse Anita Patel',
-      empId: '10006',
-      email: 'anita.patel@tmshospital.com',
-      phone: '9000000007',
-      password: requesterPwd,
-      role: Role.REQUESTER,
-      deptCode: 'NURS',
-    },
-    {
-      fullName: 'Dr. Arjun Mehta',
-      empId: '10007',
-      email: 'arjun.mehta@tmshospital.com',
-      phone: '9000000008',
-      password: requesterPwd,
-      role: Role.REQUESTER,
-      deptCode: 'CARDIO',
-    },
-    {
-      fullName: 'Pharmacist Sunita Rao',
-      empId: '10008',
-      email: 'sunita.rao@tmshospital.com',
-      phone: '9000000009',
-      password: requesterPwd,
-      role: Role.REQUESTER,
-      deptCode: 'PHARMA',
-    },
-  ];
-
-  const deptCodesWithNamedUser = new Set(namedUserSpecs.map((s) => s.deptCode));
-  const AUTO_EMP_ID_START = 10009;
-  const autoRequesterSpecs = DEPARTMENTS.filter((d) => !deptCodesWithNamedUser.has(d.code)).map((d, idx) => ({
-    fullName: `${d.name} Coordinator`,
-    empId: String(AUTO_EMP_ID_START + idx).padStart(5, '0'),
-    email: `coordinator.${d.code.toLowerCase()}@tmshospital.com`,
-    phone: `9100${String(10000 + idx).slice(-4)}`,
-    password: requesterPwd,
-    role: Role.REQUESTER,
-    deptCode: d.code,
+  const userPayload = USER_SPECS.map((item) => ({
+    fullName: item.fullName,
+    empId: item.empId,
+    email: item.email,
+    phone: `9${item.empId.padStart(9, '0').slice(0, 9)}`,
+    password: passwordHashes[item.pwdKey],
+    role: item.role,
+    departmentId: deptByCode[item.deptCode]?._id ?? null,
+    isActive: true,
   }));
+  const users = await User.insertMany(userPayload);
+  const userByEmpId = Object.fromEntries(users.map((item) => [item.empId, item]));
 
-  const allUserSpecs = [...namedUserSpecs, ...autoRequesterSpecs];
-  const usersData = allUserSpecs.map(({ deptCode, ...rest }) => ({
-    ...rest,
-    departmentId: deptByCode[deptCode]._id,
-  }));
-
-  const users = await User.insertMany(usersData);
-  const userByRole = (role) => users.filter((u) => u.role === role);
-  const requesters = userByRole(Role.REQUESTER);
-  const helpdesks = userByRole(Role.HELPDESK);
-  console.log(`Seeded ${users.length} users`);
-
-  // Tickets
-  const ticketDefs = [
-    {
-      title: 'Workstation not booting in OPD',
-      description: 'The desktop in room A-G-01 does not power on since morning.',
-      priority: Priority.HIGH,
-      status: TicketStatus.OPEN,
-      categoryCode: 'HW',
-      subCode: 'HW-DESK',
-      deptCode: 'IT',
-      locIdx: 0,
-      createdDaysAgo: 1,
-    },
-    {
-      title: 'HIS application crashing on login',
-      description: 'HIS throws an unhandled exception when staff try to log in.',
-      priority: Priority.CRITICAL,
-      status: TicketStatus.IN_PROGRESS,
-      categoryCode: 'SW',
-      subCode: 'SW-HIS',
-      deptCode: 'IT',
-      locIdx: 9,
-      createdDaysAgo: 2,
-    },
-    {
-      title: 'Wi-Fi not working in ICU',
-      description: 'Nursing staff cannot connect to hospital Wi-Fi in ICU ward.',
-      priority: Priority.HIGH,
-      status: TicketStatus.ASSIGNED,
-      categoryCode: 'NET',
-      subCode: 'NET-WIFI',
-      deptCode: 'IT',
-      locIdx: 4,
-      createdDaysAgo: 1,
-    },
-    {
-      title: 'ECG machine display flickering',
-      description: 'ECG machine in cardiology ward shows intermittent display issues.',
-      priority: Priority.CRITICAL,
-      status: TicketStatus.ESCALATED,
-      categoryCode: 'BIO',
-      subCode: 'BIO-ECG',
-      deptCode: 'CARDIO',
-      locIdx: 2,
-      createdDaysAgo: 3,
-    },
-    {
-      title: 'AC not cooling in Radiology',
-      description: 'The HVAC unit in the radiology room is not maintaining temperature.',
-      priority: Priority.MEDIUM,
-      status: TicketStatus.RESOLVED,
-      categoryCode: 'FAC',
-      subCode: 'FAC-HVAC',
-      deptCode: 'RADIO',
-      locIdx: 5,
-      createdDaysAgo: 5,
-    },
-    {
-      title: 'Printer offline in pharmacy',
-      description: 'Label printer in pharmacy is showing offline status.',
-      priority: Priority.LOW,
-      status: TicketStatus.CLOSED,
-      categoryCode: 'HW',
-      subCode: 'HW-PRNT',
-      deptCode: 'PHARMA',
-      locIdx: 7,
-      createdDaysAgo: 7,
-    },
-    {
-      title: 'VPN access not working for remote staff',
-      description: 'Remote staff cannot connect to hospital VPN since last update.',
-      priority: Priority.HIGH,
-      status: TicketStatus.OPEN,
-      categoryCode: 'NET',
-      subCode: 'NET-VPN',
-      deptCode: 'IT',
-      locIdx: 9,
-      createdDaysAgo: 0,
-    },
-    {
-      title: 'Infusion pump alarm not silencing',
-      description: 'Infusion pump in ICU keeps alarming even after acknowledgement.',
-      priority: Priority.CRITICAL,
-      status: TicketStatus.IN_PROGRESS,
-      categoryCode: 'BIO',
-      subCode: 'BIO-PUMP',
-      deptCode: 'ER',
-      locIdx: 3,
-      createdDaysAgo: 1,
-    },
-    {
-      title: 'Electrical short circuit in lab',
-      description: 'A short circuit tripped the breaker in the lab corridor.',
-      priority: Priority.HIGH,
-      status: TicketStatus.ASSIGNED,
-      categoryCode: 'FAC',
-      subCode: 'FAC-ELEC',
-      deptCode: 'LAB',
-      locIdx: 6,
-      createdDaysAgo: 2,
-    },
-    {
-      title: 'Antivirus definitions outdated on nurse stations',
-      description: 'Antivirus on nursing floor workstations has not updated in 30 days.',
-      priority: Priority.MEDIUM,
-      status: TicketStatus.ON_HOLD,
-      categoryCode: 'SW',
-      subCode: 'SW-SEC',
-      deptCode: 'NURS',
-      locIdx: 1,
-      createdDaysAgo: 4,
-    },
-    {
-      title: 'Duplicate ticket raised by mistake',
-      description: 'Requester raised the same issue twice and wants to cancel this ticket.',
-      priority: Priority.LOW,
-      status: TicketStatus.CANCELLED,
-      categoryCode: 'SW',
-      subCode: 'SW-MAIL',
-      deptCode: 'ADMIN',
-      locIdx: 8,
-      createdDaysAgo: 2,
-    },
-    {
-      title: 'Ventilator preventive maintenance due',
-      description: 'Biomed team needs to complete scheduled PM on ICU ventilators.',
-      priority: Priority.MEDIUM,
-      status: TicketStatus.OPEN,
-      categoryCode: 'BIO',
-      subCode: 'BIO-VENT',
-      deptCode: 'BIOENG',
-      locIdx: 4,
-      createdDaysAgo: 1,
-    },
-    {
-      title: 'Patient monitor network dropouts',
-      description: 'Central monitoring station loses telemetry from beds 3–6 intermittently.',
-      priority: Priority.HIGH,
-      status: TicketStatus.IN_PROGRESS,
-      categoryCode: 'NET',
-      subCode: 'NET-LAN',
-      deptCode: 'ICU',
-      locIdx: 4,
-      createdDaysAgo: 0,
-    },
-    {
-      title: 'Chemo suite fridge temperature alert',
-      description: 'Oncology cold-chain fridge reporting high temperature warnings.',
-      priority: Priority.CRITICAL,
-      status: TicketStatus.ASSIGNED,
-      categoryCode: 'FAC',
-      subCode: 'FAC-HVAC',
-      deptCode: 'ONCO',
-      locIdx: 2,
-      createdDaysAgo: 1,
-    },
-    {
-      title: 'Ultrasound probe intermittent failure',
-      description: 'OBGYN ultrasound probe disconnects during scans.',
-      priority: Priority.HIGH,
-      status: TicketStatus.OPEN,
-      categoryCode: 'BIO',
-      subCode: 'BIO-US',
-      deptCode: 'OBGYN',
-      locIdx: 1,
-      createdDaysAgo: 2,
-    },
-    {
-      title: 'EHR downtime drill documentation',
-      description: 'Medical records needs IT support for scheduled downtime communications.',
-      priority: Priority.LOW,
-      status: TicketStatus.ON_HOLD,
-      categoryCode: 'SW',
-      subCode: 'SW-HIS',
-      deptCode: 'MEDREC',
-      locIdx: 8,
-      createdDaysAgo: 6,
-    },
-    {
-      title: 'Spill cleanup cart restock',
-      description: 'Housekeeping requests restock of spill kits on pediatric floor.',
-      priority: Priority.LOW,
-      status: TicketStatus.RESOLVED,
-      categoryCode: 'FAC',
-      subCode: 'FAC-HKEP',
-      deptCode: 'HKEEP',
-      locIdx: 0,
-      createdDaysAgo: 4,
-    },
-  ];
-
-  const catByCode = Object.fromEntries(categoryDocs.map((c) => [c.code, c]));
-  const subByCode = Object.fromEntries(subcategoryDocs.map((s) => [s.code, s]));
-
-  const createdTickets = [];
-
-  for (let i = 0; i < ticketDefs.length; i++) {
-    const def = ticketDefs[i];
-    const requester = randomItem(requesters);
-    const assignee = [TicketStatus.ASSIGNED, TicketStatus.IN_PROGRESS, TicketStatus.ESCALATED, TicketStatus.RESOLVED, TicketStatus.CLOSED].includes(def.status)
-      ? randomItem([...helpdesks])
-      : null;
-
-    const createdAt = daysAgo(def.createdDaysAgo);
-    const resolvedAt = def.status === TicketStatus.RESOLVED || def.status === TicketStatus.CLOSED
-      ? new Date(createdAt.getTime() + 3600000 * 4)
-      : null;
-    const cancelledAt =
-      def.status === TicketStatus.CANCELLED ? new Date(createdAt.getTime() + 3600000) : null;
-
+  for (let index = 0; index < TICKET_SPECS.length; index += 1) {
+    const spec = TICKET_SPECS[index];
+    const createdAt = new Date(Date.now() - (index + 1) * 60 * 60 * 1000);
     const ticket = await Ticket.create({
-      ticketNumber: buildTicketNumber(def.categoryCode, i + 1),
-      title: def.title,
-      description: def.description,
-      priority: def.priority,
-      status: def.status,
-      isOverdue: def.status === TicketStatus.ESCALATED,
-      departmentId: deptByCode[def.deptCode]._id,
-      categoryId: catByCode[def.categoryCode]._id,
-      subcategoryId: subByCode[def.subCode]._id,
-      locationId: locations[def.locIdx]._id,
-      requesterId: requester._id,
-      assignedToId: assignee?._id ?? null,
-      resolvedAt,
-      cancelledAt,
+      ticketNumber: buildTicketNumber(spec.categoryCode, index),
+      title: spec.title,
+      description: spec.description,
+      priority: spec.priority,
+      status: spec.status,
+      departmentId: deptByCode[spec.departmentCode]._id,
+      requesterDepartmentId: userByEmpId[spec.requesterEmpId]?.departmentId ?? null,
+      categoryId: categoryByCode[spec.categoryCode]._id,
+      subcategoryId: subcategoryByCode[spec.subcategoryCode]._id,
+      locationId: locations[spec.locationIndex]?._id ?? null,
+      locationText: spec.locationText,
+      requesterId: userByEmpId[spec.requesterEmpId]._id,
+      assignedToId: spec.assigneeEmpId ? userByEmpId[spec.assigneeEmpId]._id : null,
+      telecomNumber: spec.telecomNumber,
       createdAt,
       updatedAt: createdAt,
+      resolvedAt: spec.status === TicketStatus.RESOLVED ? new Date(createdAt.getTime() + 2 * 60 * 60 * 1000) : null,
     });
 
-    createdTickets.push(ticket);
-
-    // Activity log — created
-    await TicketActivityLog.create({
-      ticketId: ticket._id,
-      actorId: requester._id,
-      action: 'CREATED',
-      toValue: TicketStatus.OPEN,
-      note: 'Ticket submitted',
-      createdAt,
-    });
-
-    if (def.status === TicketStatus.CANCELLED) {
-      await TicketActivityLog.create({
-        ticketId: ticket._id,
-        actorId: requester._id,
-        action: 'CANCELLED',
-        fromValue: TicketStatus.OPEN,
-        toValue: TicketStatus.CANCELLED,
-        note: 'Ticket cancelled by requester',
-        createdAt: cancelledAt,
-      });
-    }
-
-    // Activity log — assigned/claimed
-    if (assignee) {
-      await TicketActivityLog.create({
-        ticketId: ticket._id,
-        actorId: assignee._id,
-        action: 'ASSIGNED',
-        fromValue: TicketStatus.OPEN,
-        toValue: ticket.status,
-        note: `Claimed by ${assignee.fullName}`,
-        createdAt: new Date(createdAt.getTime() + 1800000),
-      });
-    }
-
-    // Comment
     await TicketComment.create({
       ticketId: ticket._id,
-      authorId: requester._id,
-      content: `Issue reported: ${def.description}`,
+      authorId: userByEmpId[spec.requesterEmpId]._id,
+      content: `Raised by requester: ${spec.description}`,
       isInternal: false,
       createdAt,
     });
 
-    if (assignee) {
-      await TicketComment.create({
-        ticketId: ticket._id,
-        authorId: assignee._id,
-        content: 'Acknowledged. Investigating the issue.',
-        isInternal: true,
-        createdAt: new Date(createdAt.getTime() + 3600000),
-      });
-    }
+    await TicketActivityLog.create({
+      ticketId: ticket._id,
+      actorId: userByEmpId[spec.requesterEmpId]._id,
+      action: 'CREATED',
+      toValue: TicketStatus.OPEN,
+      note: 'Ticket created via seed',
+      createdAt,
+    });
   }
 
-  console.log(`Seeded ${createdTickets.length} tickets with comments and activity logs`);
-
-  // Summary
-  console.log('\n=== Seed Complete ===');
-  console.log(`Departments   : ${departments.length}`);
-  console.log(`Categories    : ${categoryDocs.length}`);
-  console.log(`Subcategories : ${subcategoryDocs.length}`);
-  console.log(`Locations     : ${locations.length}`);
-  console.log(`SLA Configs   : ${SLA_CONFIGS.length}`);
-  console.log(`Users         : ${users.length}`);
-  console.log(`Tickets       : ${createdTickets.length}`);
-  console.log('\nAdmin login:');
-  console.log(`  empId    : 10001`);
-  console.log(`  password : ${process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345'}`);
-  } finally {
-    await mongoose.disconnect();
-  }
+  console.log('Seed complete');
+  console.log(`Departments: ${departments.length}`);
+  console.log(`Categories: ${createdCategories.length}`);
+  console.log(`Subcategories: ${createdSubcategories.length}`);
+  console.log(`Locations: ${locations.length}`);
+  console.log(`Users: ${users.length}`);
+  console.log(`Tickets: ${TICKET_SPECS.length}`);
+  console.log(`Admin login => empId: 10001, password: ${passwords.ADMIN}`);
 };
 
 seed()
-  .then(() => {
-    console.log('\nDone.');
+  .then(async () => {
+    await mongoose.disconnect();
+    console.log('Done.');
     process.exit(0);
   })
-  .catch((err) => {
-    console.error('Seed failed:', err);
+  .catch(async (error) => {
+    console.error('Seed failed:', error);
+    await mongoose.disconnect();
     process.exit(1);
   });

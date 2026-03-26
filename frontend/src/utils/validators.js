@@ -42,7 +42,7 @@ export const validatePositiveInteger = (value, label, { required = false } = {})
   return Number.isInteger(Number(value)) && Number(value) > 0 ? '' : `${label} must be a valid positive number.`;
 };
 
-export const validateFile = (file, { allowedTypes = [], maxSizeInBytes = 10 * 1024 * 1024 } = {}) => {
+export const validateFile = (file, { allowedTypes = [], maxSizeInBytes = 150 * 1024 * 1024 } = {}) => {
   if (!file) {
     return '';
   }
@@ -55,5 +55,18 @@ export const validateFile = (file, { allowedTypes = [], maxSizeInBytes = 10 * 10
     return 'Selected file exceeds the allowed size limit.';
   }
 
+  return '';
+};
+
+export const validateFiles = (files, { allowedTypes = [], maxSizeInBytes = 150 * 1024 * 1024, maxCount = 10 } = {}) => {
+  const list = Array.isArray(files) ? files : [];
+  if (!list.length) return '';
+  if (list.length > maxCount) {
+    return `You can upload up to ${maxCount} files at once.`;
+  }
+  for (const file of list) {
+    const err = validateFile(file, { allowedTypes, maxSizeInBytes });
+    if (err) return err;
+  }
   return '';
 };

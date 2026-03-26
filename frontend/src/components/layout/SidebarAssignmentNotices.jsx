@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { getAssignmentNoticesRequest } from '../../services/ticketService';
-import { formatDateTime } from '../../utils/ticketHelpers';
 
 const LEADERSHIP_ROLE_LABEL = {
   HOD: 'HOD',
@@ -47,38 +46,26 @@ function SidebarAssignmentNotices() {
     return null;
   }
 
-  return (
-    <div className="mt-4 pt-3 border-top">
-      <div className="small text-uppercase text-secondary fw-semibold mb-2">Assigned by leadership</div>
-      <p className="small text-secondary mb-2">Tickets transferred to you by HOD or Administrator.</p>
-      <ul className="list-unstyled small mb-0 d-flex flex-column gap-2">
-        {items.map((n) => {
-          const roleKey = n?.actorRole ?? '';
-          const roleLabel = LEADERSHIP_ROLE_LABEL[roleKey] ?? 'Leadership';
-          const ticketRef = n?.ticketNumber || n?.ticketId || '';
+  const latest = items[0];
+  const roleKey = latest?.actorRole ?? '';
+  const roleLabel = LEADERSHIP_ROLE_LABEL[roleKey] ?? 'Leadership';
 
-          return (
-            <li key={n.id} className="border rounded-3 p-2 bg-light">
-              <div className="fw-semibold text-dark text-truncate" title={n.ticketTitle ?? ''}>
-                {n.ticketNumber || 'Ticket'}
-              </div>
-              <div className="text-secondary text-truncate" title={n.ticketTitle ?? ''}>
-                {n.ticketTitle || '—'}
-              </div>
-              <div className="mt-1">
-                <span className="text-secondary">By {roleLabel}: </span>
-                <span className="fw-medium">{n.actorName || 'Staff'}</span>
-              </div>
-              <div className="text-secondary mt-1">{n.createdAt ? formatDateTime(n.createdAt) : ''}</div>
-              {ticketRef ? (
-                <Link to={`/tickets/${ticketRef}`} className="btn btn-sm btn-outline-primary mt-2 w-100">
-                  Open ticket
-                </Link>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+  return (
+    <div className="border-top pt-3">
+      <div className="small text-uppercase text-secondary fw-semibold mb-1">Assigned by leadership</div>
+      <p className="small text-secondary mb-2" style={{ fontSize: '0.78rem' }}>
+        {items.length} ticket(s) assigned by HOD/Administrator.
+      </p>
+      {latest ? (
+        <p className="small text-secondary mb-2 text-truncate" title={`${latest.ticketNumber} · ${latest.actorName} (${roleLabel})`}>
+          Latest: {latest.ticketNumber} by {latest.actorName} ({roleLabel})
+        </p>
+      ) : null}
+      <div className="text-start">
+        <Link to="/leadership-assignments" className="btn btn-sm btn-outline-primary w-100">
+          Open leadership assignments
+        </Link>
+      </div>
     </div>
   );
 }

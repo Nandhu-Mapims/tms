@@ -1,11 +1,29 @@
 const { StatusCodes } = require('http-status-codes');
 const ApiError = require('../../utils/ApiError');
-const { canViewInternalComments, ensureInternalCommentPermission, createActivityLog } = require('./ticketActivity.service');
+const { ensureInternalCommentPermission, createActivityLog } = require('./ticketActivity.service');
 const { getTicketForAccess } = require('./ticket.shared');
 const TicketComment = require('../../models/TicketComment.model');
 const User = require('../../models/User.model');
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
+const toIdString = (value) => (value?._id?.toString?.() ?? value?.toString?.() ?? String(value ?? ''));
+
+const canReadInternalThread = (ticket, user) => {
+  const role = String(user?.role ?? '');
+  if (role === 'ADMIN' || role === 'HOD') return true;
+  const userId = toIdString(user?.id);
+  const requesterId = toIdString(ticket?.requesterId);
+  const assignedToId = toIdString(ticket?.assignedToId);
+  if (role === 'REQUESTER' && requesterId && requesterId === userId) return true;
+  if (role === 'HELPDESK' && assignedToId && assignedToId === userId) return true;
+  return false;
+};
+
+const ensureInternalThreadWritePermission = (ticket, user, isInternal) => {
+  if (!isInternal) return;
+  if (canReadInternalThread(ticket, user)) return;
+  throw new ApiError(StatusCodes.FORBIDDEN, 'Only the requester and current handler can use chat on this ticket');
+};
 
 const addComment = async (ticketId, payload, user) => {
   const ticket = await getTicketForAccess(ticketId, user);
@@ -16,7 +34,8 @@ const addComment = async (ticketId, payload, user) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'comment is required');
   }
 
-  ensureInternalCommentPermission(user, isInternal);
+  ensureInternalCommentPermission(user, false);
+  ensureInternalThreadWritePermission(ticket, user, isInternal);
 
   const createdComment = await TicketComment.create({
     ticketId: ticket._id,
@@ -52,7 +71,6 @@ const getComments = async (ticketId, user) => {
 
   const where = {
     ticketId: ticket._id,
-    ...(canViewInternalComments(user) ? {} : { isInternal: false }),
   };
 
   const comments = await TicketComment.find(where)

@@ -1,4 +1,8 @@
-import { useEffect, useState } from 'react';
+/**
+ * HOD-to-HOD ticket list page.
+ * Shows tickets in the HOD's department that were raised by other HODs (requester role = HOD).
+ */
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import EmptyState from '../../components/common/EmptyState.jsx';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
@@ -6,11 +10,10 @@ import PageHeader from '../../components/common/PageHeader.jsx';
 import PaginationControls from '../../components/tickets/PaginationControls.jsx';
 import TicketFilters from '../../components/tickets/TicketFilters.jsx';
 import TicketTable from '../../components/tickets/TicketTable.jsx';
-import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { getCategories, getDepartments } from '../../services/masterDataService';
-import { cancelTicketRequestByRequester, getTicketsRequest } from '../../services/ticketService';
-import { useAuth } from '../../hooks/useAuth';
+import { getTicketsRequest } from '../../services/ticketService';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 
 const ROWS_PER_PAGE_OPTIONS = [
@@ -21,33 +24,39 @@ const ROWS_PER_PAGE_OPTIONS = [
   { value: 100, label: 'All (max 100)' },
 ];
 
-const initialFilters = {
-  search: '',
-  status: '',
-  priority: '',
-  categoryId: '',
-  departmentId: '',
-  requesterDepartmentId: '',
-  isOverdue: '',
-  startDate: '',
-  endDate: '',
-  page: 1,
-  limit: 10,
-};
-
-function TicketListPage() {
+function HodToHodTicketsPage() {
   const toast = useToast();
-  const { confirm } = useConfirmDialog();
   const { user } = useAuth();
+
+  const lockedDepartmentId = String(user?.departmentId ?? '');
+  const initialFilters = useMemo(
+    () => ({
+      search: '',
+      status: '',
+      priority: '',
+      categoryId: '',
+      departmentId: lockedDepartmentId,
+      isOverdue: '',
+      startDate: '',
+      endDate: '',
+      page: 1,
+      limit: 10,
+    }),
+    [lockedDepartmentId]
+  );
+
   const [filters, setFilters] = useState(initialFilters);
   const [draftFilters, setDraftFilters] = useState(initialFilters);
-  const [isHandledByMeOnly, setIsHandledByMeOnly] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [meta, setMeta] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isCancelling, setIsCancelling] = useState(false);
   const [pageError, setPageError] = useState('');
   const [masterData, setMasterData] = useState({ categories: [], departments: [] });
+
+  useEffect(() => {
+    setFilters((prev) => ({ ...prev, departmentId: lockedDepartmentId, page: 1 }));
+    setDraftFilters((prev) => ({ ...prev, departmentId: lockedDepartmentId, page: 1 }));
+  }, [lockedDepartmentId]);
 
   useEffect(() => {
     const loadMasterData = async () => {
@@ -56,7 +65,11 @@ function TicketListPage() {
           getCategories({ isActive: true }),
           getDepartments({ isActive: true }),
         ]);
-        setMasterData({ categories: categories.data, departments: departments.data });
+        setMasterData({
+          categories: categories?.data ?? [],
+          departments: departments?.data ?? [],
+        });
+        setPageError('');
       } catch (error) {
         const message = getErrorMessage(error, 'Unable to load ticket filter data.');
         setPageError(message);
@@ -73,14 +86,14 @@ function TicketListPage() {
       setPageError('');
 
       try {
-        const userId = String(user?.id ?? '');
-        const effectiveFilters =
-          isHandledByMeOnly && userId
-            ? { ...filters, assignedToId: userId, excludePendingHandoff: true }
-            : filters;
+        const effectiveFilters = {
+          ...filters,
+          assignedRole: 'HOD',
+        };
+
         const response = await getTicketsRequest(effectiveFilters);
-        setTickets(response.data);
-        setMeta(response.meta);
+        setTickets(response?.data ?? []);
+        setMeta(response?.meta ?? null);
       } catch (error) {
         const message = getErrorMessage(error, 'Unable to fetch tickets.');
         setPageError(message);
@@ -90,89 +103,41 @@ function TicketListPage() {
       }
     };
 
+    if (!user?.departmentId) return undefined;
     loadTickets();
-  }, [filters, isHandledByMeOnly, toast, user?.id]);
+  }, [filters, toast, user?.departmentId]);
+
+  const activeFilterCount = ['search', 'status', 'priority', 'categoryId', 'isOverdue', 'startDate', 'endDate']
+    .filter((key) => Boolean(filters[key]))
+    .length;
 
   const handleDraftChange = (name, value) => {
+    if (name === 'departmentId') return; // department is locked for this view
     setDraftFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleApplyFilters = () => {
-    setFilters({ ...draftFilters, page: 1 });
+    setFilters((prev) => ({
+      ...prev,
+      ...draftFilters,
+      departmentId: lockedDepartmentId,
+      page: 1,
+    }));
   };
 
   const handleResetFilters = () => {
     setDraftFilters(initialFilters);
     setFilters(initialFilters);
-    setIsHandledByMeOnly(false);
   };
 
-  const handleCancelRequesterTicket = async (ticket) => {
-    const ticketId = ticket?.id ?? ticket?.ticketNumber;
-    if (!ticketId) return;
-
-    const approved = await confirm({
-      title: 'Cancel request',
-      message: 'Cancel this ticket request while it is still in opening stage?',
-      confirmText: 'Cancel request',
-      variant: 'warning',
-    });
-    if (!approved) return;
-
-    setIsCancelling(true);
-    setPageError('');
-    try {
-      await cancelTicketRequestByRequester(ticketId);
-      toast.success('Request cancelled successfully.');
-      setFilters((prev) => ({ ...prev }));
-    } catch (error) {
-      const message = getErrorMessage(error, 'Unable to cancel request.');
-      setPageError(message);
-      toast.error(message);
-    } finally {
-      setIsCancelling(false);
-    }
-  };
-
-  const canRaiseTicket = user?.role === 'REQUESTER' || user?.role === 'HOD';
-  const actions = canRaiseTicket
-    ? [<Link key="create" to="/tickets/create" className="btn btn-primary">Create Ticket</Link>]
-    : [];
-
-  if (user?.role && user.role !== 'REQUESTER') {
-    actions.push(
-      <button
-        key="handledByMe"
-        type="button"
-        title="Active queue only: excludes tickets you offered to another agent until they accept (those stay in the full ticket list)."
-        className={`btn ${isHandledByMeOnly ? 'btn-primary' : 'btn-outline-primary'}`}
-        onClick={() => {
-          const userId = String(user?.id ?? '');
-          if (!userId) return;
-          setIsHandledByMeOnly((prev) => !prev);
-          setFilters((prev) => ({ ...prev, page: 1 }));
-        }}
-      >
-        Handled by me
-      </button>
-    );
-  }
-  const activeFilterCount = [
-    'search',
-    'status',
-    'priority',
-    'categoryId',
-    'departmentId',
-    'requesterDepartmentId',
-    'isOverdue',
-    'startDate',
-    'endDate',
-  ].filter((key) => Boolean(filters[key])).length;
+  const canRaiseTicket = user?.role === 'HOD';
+  const actions = canRaiseTicket ? [<Link key="create" to="/tickets/create" className="btn btn-primary">Create Ticket</Link>] : [];
 
   return (
     <>
-      <PageHeader title="Tickets" subtitle="Track hospital requests, assignments, and service progress." actions={actions} />
+      <PageHeader title="HOD to HOD Tickets" subtitle="Tickets in your department managed/assigned to HODs." actions={actions} />
       {pageError ? <div className="alert alert-danger">{pageError}</div> : null}
+
       <TicketFilters
         filters={draftFilters}
         categories={masterData.categories}
@@ -195,7 +160,7 @@ function TicketListPage() {
               value={filters.limit}
               onChange={(e) => {
                 const nextLimit = Number(e.target.value);
-                const limit = Number.isFinite(nextLimit) && nextLimit > 0 ? nextLimit : initialFilters.limit;
+                const limit = Number.isFinite(nextLimit) && nextLimit > 0 ? nextLimit : 10;
                 setFilters((prev) => ({ ...prev, limit, page: 1 }));
                 setDraftFilters((prev) => ({ ...prev, limit, page: 1 }));
               }}
@@ -214,30 +179,19 @@ function TicketListPage() {
         <LoadingCard message="Loading tickets..." />
       ) : tickets.length ? (
         <>
-          <TicketTable
-            tickets={tickets}
-            userId={user?.id}
-            userRole={user?.role}
-            onCancelRequest={handleCancelRequesterTicket}
-            isCancelling={isCancelling}
-          />
+          <TicketTable tickets={tickets} userId={user?.id} userRole={user?.role} isCancelling={false} />
           <PaginationControls meta={meta} onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))} />
         </>
       ) : (
         <EmptyState
           title="No tickets found"
-          description="There are no tickets matching the selected filters."
-          action={
-            canRaiseTicket ? (
-              <Link to="/tickets/create" className="btn btn-primary">
-                Create Ticket
-              </Link>
-            ) : null
-          }
+          description="There are no tickets currently assigned to HODs in your department."
+          action={canRaiseTicket ? <Link to="/tickets/create" className="btn btn-primary">Create Ticket</Link> : null}
         />
       )}
     </>
   );
 }
 
-export default TicketListPage;
+export default HodToHodTicketsPage;
+

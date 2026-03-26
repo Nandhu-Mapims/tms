@@ -14,7 +14,9 @@ import UserManagementPage from '../pages/admin/UserManagementPage.jsx';
 import TicketCreatePage from '../pages/tickets/TicketCreatePage.jsx';
 import TicketDetailsPage from '../pages/tickets/TicketDetailsPage.jsx';
 import TicketListPage from '../pages/tickets/TicketListPage.jsx';
+import HodToHodTicketsPage from '../pages/tickets/HodToHodTicketsPage.jsx';
 import TransferRequestsPage from '../pages/tickets/TransferRequestsPage.jsx';
+import LeadershipAssignmentsPage from '../pages/tickets/LeadershipAssignmentsPage.jsx';
 
 function AppRoutes() {
   return (
@@ -27,12 +29,16 @@ function AppRoutes() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/tickets" element={<TicketListPage />} />
+          <Route element={<ProtectedRoute allowedRoles={['HOD']} />}>
+            <Route path="/hod-to-hod-tickets" element={<HodToHodTicketsPage />} />
+          </Route>
           <Route element={<ProtectedRoute allowedRoles={['REQUESTER', 'HOD']} />}>
             <Route path="/tickets/create" element={<TicketCreatePage />} />
           </Route>
           <Route path="/tickets/:id" element={<TicketDetailsPage />} />
           <Route element={<ProtectedRoute allowedRoles={['HELPDESK']} />}>
             <Route path="/transfer-requests" element={<TransferRequestsPage />} />
+            <Route path="/leadership-assignments" element={<LeadershipAssignmentsPage />} />
           </Route>
         </Route>
       </Route>

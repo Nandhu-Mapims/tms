@@ -54,6 +54,20 @@ const buildScopedWhere = (user, filters = {}) => {
     where.requesterId = toObjectId(user.id, 'userId');
   }
 
+  if (user.role === Role.HELPDESK) {
+    if (!user?.departmentId) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
+    }
+    where.departmentId = toObjectId(user.departmentId, 'departmentId'); // routed "send to" department
+  }
+
+  if (user.role === Role.HOD) {
+    if (!user?.departmentId) {
+      throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
+    }
+    where.departmentId = toObjectId(user.departmentId, 'departmentId'); // routed "send to" department
+  }
+
   return where;
 };
 

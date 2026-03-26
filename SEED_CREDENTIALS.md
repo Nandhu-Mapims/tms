@@ -1,78 +1,36 @@
-# Seeded user credentials
+# Seeded User Credentials (New Seed)
 
-Use **Employee ID** and **password** to sign in. Email addresses are for reference only.
+Run `npm run seed` inside `backend` to wipe and reseed the database with the new dataset.
 
-Run `npm run seed` in `backend` to load this data (it wipes and reseeds the database).
+## Default passwords
 
----
+- Admin: `Admin@12345` (or `SEED_ADMIN_PASSWORD` from `backend/.env`)
+- Helpdesk: `Helpdesk@12345` (or `SEED_HELPDESK_PASSWORD`)
+- HOD: `Hod@12345` (or `SEED_HOD_PASSWORD`)
+- Requesters: `User@12345` (or `SEED_REQUESTER_PASSWORD`)
 
-## Admin, Helpdesk, and HOD (role-specific passwords)
+## Users
 
-| Role      | Full name              | Emp ID | Email                      | Password        |
-| --------- | ---------------------- | ------ | -------------------------- | --------------- |
-| ADMIN     | System Administrator   | `10001` | admin@tmshospital.com      | `Admin@12345`¹  |
-| HELPDESK  | Helpdesk Agent One     | `10002` | helpdesk1@tmshospital.com  | `Helpdesk@12345` |
-| HELPDESK  | Helpdesk Agent Two     | `10003` | helpdesk2@tmshospital.com  | `Helpdesk@12345` |
-| HOD       | Dr. Cardiology HOD     | `10004` | hod.cardio@tmshospital.com | `Hod@12345`     |
-| HOD       | Dr. Radiology HOD      | `10005` | hod.radio@tmshospital.com  | `Hod@12345`     |
-
-¹ Admin password is `SEED_ADMIN_PASSWORD` from `backend/.env` if set before seeding; otherwise `Admin@12345`.
-
----
-
-## Named requesters (password `User@12345`)
-
-| Role       | Full name           | Emp ID | Email                    |
-| ---------- | ------------------- | ------ | ------------------------ |
-| REQUESTER  | Nurse Anita Patel   | `10006` | anita.patel@tmshospital.com |
-| REQUESTER  | Dr. Arjun Mehta     | `10007` | arjun.mehta@tmshospital.com |
-| REQUESTER  | Pharmacist Sunita Rao | `10008` | sunita.rao@tmshospital.com |
-
----
-
-## Department coordinators (password `User@12345` for all)
-
-| Emp ID  | Full name                               | Email                                  | Department code |
-| ------- | --------------------------------------- | -------------------------------------- | --------------- |
-| `10009` | Biomedical Engineering Coordinator      | coordinator.bioeng@tmshospital.com     | BIOENG          |
-| `10010` | Emergency Coordinator                   | coordinator.er@tmshospital.com         | ER              |
-| `10011` | Intensive Care Coordinator              | coordinator.icu@tmshospital.com        | ICU             |
-| `10012` | Administration Coordinator              | coordinator.admin@tmshospital.com      | ADMIN           |
-| `10013` | Laboratory Coordinator                  | coordinator.lab@tmshospital.com        | LAB             |
-| `10014` | Pediatrics Coordinator                | coordinator.pedia@tmshospital.com    | PEDIA           |
-| `10015` | Orthopedics Coordinator               | coordinator.ortho@tmshospital.com    | ORTHO           |
-| `10016` | Neurology Coordinator                 | coordinator.neuro@tmshospital.com     | NEURO           |
-| `10017` | Oncology Coordinator                  | coordinator.onco@tmshospital.com     | ONCO            |
-| `10018` | General Surgery Coordinator           | coordinator.surg@tmshospital.com     | SURG            |
-| `10019` | Anesthesia Coordinator                | coordinator.anes@tmshospital.com     | ANES            |
-| `10020` | Obstetrics & Gynecology Coordinator   | coordinator.obgyn@tmshospital.com    | OBGYN           |
-| `10021` | Psychiatry Coordinator                | coordinator.psych@tmshospital.com    | PSYCH           |
-| `10022` | ENT Coordinator                       | coordinator.ent@tmshospital.com      | ENT             |
-| `10023` | Ophthalmology Coordinator             | coordinator.ophth@tmshospital.com    | OPHTH           |
-| `10024` | Dermatology Coordinator               | coordinator.derm@tmshospital.com     | DERM            |
-| `10025` | Physiotherapy Coordinator             | coordinator.physt@tmshospital.com    | PHYST           |
-| `10026` | Nutrition & Dietetics Coordinator     | coordinator.diet@tmshospital.com     | DIET            |
-| `10027` | Medical Records Coordinator           | coordinator.medrec@tmshospital.com   | MEDREC          |
-| `10028` | Human Resources Coordinator           | coordinator.hr@tmshospital.com       | HR              |
-| `10029` | Finance & Billing Coordinator         | coordinator.fin@tmshospital.com      | FIN             |
-| `10030` | Security Coordinator                | coordinator.sec@tmshospital.com      | SEC             |
-| `10031` | Housekeeping Coordinator            | coordinator.hkeep@tmshospital.com    | HKEEP           |
-
----
-
-## Password summary
-
-| Account type                         | Password        |
-| ------------------------------------ | --------------- |
-| Admin                                | `Admin@12345` (or `SEED_ADMIN_PASSWORD`) |
-| Helpdesk                             | `Helpdesk@12345` |
-| HOD                                  | `Hod@12345`     |
-| All requesters and coordinators      | `User@12345`    |
-
----
+| Role | Name | Emp ID | Email | Department |
+| --- | --- | --- | --- | --- |
+| ADMIN | System Administrator | `10001` | admin@tmshospital.com | IT |
+| HELPDESK | IT Helpdesk Agent | `10002` | helpdesk.it@tmshospital.com | IT |
+| HELPDESK | IT Helpdesk Agent Two | `10011` | helpdesk2.it@tmshospital.com | IT |
+| HELPDESK | Biomedical Helpdesk Agent | `10003` | helpdesk.bio@tmshospital.com | BIOENG |
+| HELPDESK | Biomedical Helpdesk Agent Two | `10012` | helpdesk2.bio@tmshospital.com | BIOENG |
+| HELPDESK | Facilities Helpdesk Agent | `10004` | helpdesk.fac@tmshospital.com | FAC |
+| HELPDESK | Facilities Helpdesk Agent Two | `10013` | helpdesk2.fac@tmshospital.com | FAC |
+| HOD | IT HOD | `10005` | hod.it@tmshospital.com | IT |
+| HOD | Nursing HOD | `10006` | hod.nursing@tmshospital.com | NURS |
+| HOD | Pharmacy HOD | `10007` | hod.pharmacy@tmshospital.com | PHARMA |
+| REQUESTER | Requester One | `10014` | requester.one@tmshospital.com | NURS |
+| REQUESTER | Requester Two | `10015` | requester.two@tmshospital.com | PHARMA |
+| REQUESTER | Requester Three | `10016` | requester.three@tmshospital.com | IT |
 
 ## Notes
 
-- Employee IDs are exactly **five numeric digits**.
-- Change all passwords after first login in any shared or production environment.
-- See also `credition.txt` for a compact tab-separated list of the primary named accounts.
+- Employee IDs are 5-digit numeric values.
+- This seed is department-routed for helpdesk testing:
+  - IT helpdesk sees IT-routed tickets
+  - Biomedical helpdesk sees BIOENG-routed tickets
+  - Facilities helpdesk sees FAC-routed tickets

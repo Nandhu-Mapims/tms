@@ -23,18 +23,19 @@ export const getTicketByIdRequest = async (id) => {
 };
 
 export const createTicketRequest = async (payload) => {
-  const hasAttachment = Boolean(payload.attachment);
+  const files = Array.isArray(payload?.attachments)
+    ? payload.attachments.filter(Boolean)
+    : payload?.attachment
+      ? [payload.attachment]
+      : [];
+  const { attachment, attachments, ...ticketPayload } = payload ?? {};
 
-  if (!hasAttachment) {
-    const response = await apiClient.post('/tickets', payload, jsonConfig);
+  if (!files.length) {
+    const response = await apiClient.post('/tickets', ticketPayload, jsonConfig);
     return response.data;
   }
 
-  const { attachment, ...ticketPayload } = payload;
   const ticketResponse = await apiClient.post('/tickets', ticketPayload, jsonConfig);
-
-  const formData = new FormData();
-  formData.append('attachment', attachment);
 
   const ticketId =
     ticketResponse?.data?.data?.id ??
@@ -46,11 +47,15 @@ export const createTicketRequest = async (payload) => {
     throw new Error('Unable to upload attachment: created ticket id is missing');
   }
 
-  await apiClient.post(`/tickets/${ticketId}/attachments`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  for (const file of files) {
+    const formData = new FormData();
+    formData.append('attachment', file);
+    await apiClient.post(`/tickets/${ticketId}/attachments`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
 
   return ticketResponse.data;
 };
@@ -67,6 +72,11 @@ export const updateTicketStatusRequest = async (id, payload) => {
 
 export const claimTicketRequest = async (id) => {
   const response = await apiClient.patch(`/tickets/${id}/claim`, {}, jsonConfig);
+  return response.data;
+};
+
+export const cancelTicketRequestByRequester = async (id) => {
+  const response = await apiClient.patch(`/tickets/${id}/cancel-request`, {}, jsonConfigWithTimeout);
   return response.data;
 };
 
@@ -138,6 +148,11 @@ export const getAssignmentNoticesRequest = async () => {
   return response.data;
 };
 
+export const getLeadershipAssignmentsRequest = async (params = {}) => {
+  const response = await apiClient.get('/tickets/leadership-assignments', { params, timeout: REQUEST_TIMEOUT_MS });
+  return response.data;
+};
+
 export const createTicketTransferRequest = async (ticketIdentifier, payload = {}) => {
   const response = await apiClient.post(`/tickets/${ticketIdentifier}/transfer-requests`, payload, jsonConfigWithTimeout);
   return response.data;
@@ -160,5 +175,10 @@ export const approveTicketTransferRequest = async (requestId, payload = {}) => {
 
 export const rejectTicketTransferRequest = async (requestId, payload = {}) => {
   const response = await apiClient.patch(`/tickets/transfer-requests/${requestId}/reject`, payload, jsonConfigWithTimeout);
+  return response.data;
+};
+
+export const cancelTicketTransferRequest = async (requestId) => {
+  const response = await apiClient.patch(`/tickets/transfer-requests/${requestId}/cancel`, {}, jsonConfigWithTimeout);
   return response.data;
 };

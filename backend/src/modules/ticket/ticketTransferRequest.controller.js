@@ -57,11 +57,22 @@ const rejectTransferRequest = asyncHandler(async (req, res) => {
   });
 });
 
+const cancelTransferRequest = asyncHandler(async (req, res) => {
+  const data = await ticketTransferRequestService.cancelTransferRequest(req.params.requestId, req.user);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    message: 'Transfer request cancelled successfully',
+    data,
+  });
+});
+
 module.exports = {
   createTransferRequest,
   getSentTransferRequests,
   getReceivedTransferRequests,
   approveTransferRequest,
   rejectTransferRequest,
+  cancelTransferRequest,
 };
 

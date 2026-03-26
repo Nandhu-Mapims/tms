@@ -4,7 +4,7 @@ const sendResponse = require('../../utils/sendResponse');
 const userService = require('./user.service');
 
 const getAssignableUsers = asyncHandler(async (req, res) => {
-  const data = await userService.getAssignableUsers();
+  const data = await userService.getAssignableUsers(req.user?.id);
 
   sendResponse(res, {
     statusCode: StatusCodes.OK,

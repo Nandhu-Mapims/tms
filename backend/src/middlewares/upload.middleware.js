@@ -43,7 +43,7 @@ const fileFilter = (req, file, cb) => {
 const uploadTicketAttachment = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 150 * 1024 * 1024,
   },
   fileFilter,
 }).single('attachment');

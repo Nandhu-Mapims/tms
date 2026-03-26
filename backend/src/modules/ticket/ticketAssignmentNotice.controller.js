@@ -15,6 +15,18 @@ const getAssignmentNotices = asyncHandler(async (req, res) => {
   });
 });
 
+const getLeadershipAssignmentsList = asyncHandler(async (req, res) => {
+  const result = await ticketAssignmentNoticeService.getLeadershipAssignmentsList(req.query, req.user);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    message: 'Leadership assignments fetched successfully',
+    data: result.items,
+    meta: result.meta,
+  });
+});
+
 module.exports = {
   getAssignmentNotices,
+  getLeadershipAssignmentsList,
 };

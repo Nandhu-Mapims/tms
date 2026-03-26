@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { APP_NAME } from '../../config/appConfig';
@@ -8,9 +8,33 @@ import { validateFiveDigitEmpId, validateMinLength } from '../../utils/validator
 
 function LoginPage() {
   const toast = useToast();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const redirectPath = useMemo(() => location.state?.from?.pathname || '/dashboard', [location.state]);
+
+  const getSafeRedirectPath = (path, role) => {
+    const normalizedPath = String(path ?? '/dashboard');
+    const safePath = normalizedPath.startsWith('/') ? normalizedPath : '/dashboard';
+
+    if (safePath.startsWith('/admin/users') || safePath.startsWith('/admin/sla-settings')) {
+      return role === 'ADMIN' ? safePath : '/dashboard';
+    }
+
+    if (safePath.startsWith('/admin/')) {
+      return ['ADMIN', 'HELPDESK', 'HOD'].includes(role) ? safePath : '/dashboard';
+    }
+
+    if (safePath.startsWith('/transfer-requests') || safePath.startsWith('/leadership-assignments')) {
+      return role === 'HELPDESK' ? safePath : '/dashboard';
+    }
+
+    if (safePath.startsWith('/tickets/create')) {
+      return ['REQUESTER', 'HOD'].includes(role) ? safePath : '/dashboard';
+    }
+
+    return safePath;
+  };
 
   const [formState, setFormState] = useState({
     empId: '',
@@ -20,7 +44,8 @@ function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (isAuthenticated) {
-    return <Navigate to={redirectPath} replace />;
+    const role = String(user?.role ?? '');
+    return <Navigate to={getSafeRedirectPath(redirectPath, role)} replace />;
   }
 
   const handleChange = (event) => {
@@ -55,10 +80,13 @@ function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await login({
+      const nextAuth = await login({
         empId: formState.empId.trim(),
         password: formState.password,
       });
+      const role = String(nextAuth?.user?.role ?? '');
+      const safeRedirect = getSafeRedirectPath(redirectPath, role);
+      navigate(safeRedirect, { replace: true });
       toast.success('Signed in successfully.');
     } catch (error) {
       toast.error(getErrorMessage(error, 'Unable to sign in. Please verify your credentials.'));

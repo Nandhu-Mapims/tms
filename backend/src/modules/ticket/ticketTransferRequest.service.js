@@ -11,6 +11,7 @@ const TicketTransferRequest = require('../../models/TicketTransferRequest.model'
 
 const { getTicketForAccess } = require('./ticket.shared');
 const ticketService = require('./ticket.service');
+const { expireStalePendingTransferRequests } = require('./ticketTransferRequest.expiry');
 
 const toObjectId = (value, fieldName) => {
   const normalized = String(value ?? '').trim();
@@ -73,20 +74,44 @@ const createTransferRequest = async (ticketIdentifier, payload, user) => {
   if (!ticketIdentifier) throw new ApiError(StatusCodes.BAD_REQUEST, 'ticket id is required');
   if (!canCreateTransferRequest(user)) throw new ApiError(StatusCodes.FORBIDDEN, 'Only helpdesk agents can request transfers');
 
+  await expireStalePendingTransferRequests();
+
   const requestedNote = normalizeText(payload?.note, 'note');
   const ticket = await getTicketForAccess(ticketIdentifier, user);
 
   const requesterId = toObjectId(user.id, 'requesterId');
-  const targetAgentId = ticket?.assignedToId;
-  if (!targetAgentId) throw new ApiError(StatusCodes.CONFLICT, 'Ticket is not assigned to any agent');
+  const assigneeOnTicket = ticket?.assignedToId ? String(ticket.assignedToId) : '';
+  const requesterStr = String(requesterId);
 
-  const targetUser = await User.findOne({ _id: targetAgentId, isActive: true, role: Role.HELPDESK })
-    .select('_id role fullName')
-    .lean();
-  if (!targetUser) throw new ApiError(StatusCodes.FORBIDDEN, 'Ticket is assigned to a non-helpdesk agent');
+  let targetAgentId;
 
-  if (String(targetAgentId) === String(requesterId)) {
-    throw new ApiError(StatusCodes.CONFLICT, 'You are already the assigned agent for this ticket');
+  if (assigneeOnTicket === requesterStr) {
+    const recipientRaw = payload?.assignedToId ?? payload?.recipientId;
+    if (!recipientRaw) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Select a helpdesk agent to send the transfer request to');
+    }
+    const recipientId = toObjectId(recipientRaw, 'assignedToId');
+    if (String(recipientId) === requesterStr) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Choose a different helpdesk agent');
+    }
+    const recipientUser = await User.findOne({ _id: recipientId, isActive: true, role: Role.HELPDESK })
+      .select('_id')
+      .lean();
+    if (!recipientUser) throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected agent is not available for transfer');
+    targetAgentId = recipientId;
+  } else {
+    if (!assigneeOnTicket) throw new ApiError(StatusCodes.CONFLICT, 'Ticket is not assigned to any agent');
+
+    const currentAssigneeId = ticket.assignedToId;
+    const targetUser = await User.findOne({ _id: currentAssigneeId, isActive: true, role: Role.HELPDESK })
+      .select('_id role fullName')
+      .lean();
+    if (!targetUser) throw new ApiError(StatusCodes.FORBIDDEN, 'Ticket is assigned to a non-helpdesk agent');
+
+    if (String(currentAssigneeId) === String(requesterId)) {
+      throw new ApiError(StatusCodes.CONFLICT, 'You are already the assigned agent for this ticket');
+    }
+    targetAgentId = currentAssigneeId;
   }
 
   const alreadyPending = await TicketTransferRequest.findOne({
@@ -114,6 +139,9 @@ const createTransferRequest = async (ticketIdentifier, payload, user) => {
 
 const getSentTransferRequests = async (query, user) => {
   if (!canCreateTransferRequest(user)) throw new ApiError(StatusCodes.FORBIDDEN, 'Only helpdesk agents can view transfer requests');
+
+  await expireStalePendingTransferRequests();
+
   const { page, limit, skip } = parsePagination(query);
 
   const requesterId = toObjectId(user.id, 'requesterId');
@@ -136,6 +164,9 @@ const getSentTransferRequests = async (query, user) => {
 
 const getReceivedTransferRequests = async (query, user) => {
   if (!canCreateTransferRequest(user)) throw new ApiError(StatusCodes.FORBIDDEN, 'Only helpdesk agents can view transfer requests');
+
+  await expireStalePendingTransferRequests();
+
   const { page, limit, skip } = parsePagination(query);
 
   const targetAgentId = toObjectId(user.id, 'targetAgentId');
@@ -157,6 +188,8 @@ const getReceivedTransferRequests = async (query, user) => {
 };
 
 const approveTransferRequest = async (requestId, payload, user) => {
+  await expireStalePendingTransferRequests();
+
   const decidedNote = normalizeText(payload?.note, 'note');
   const requestObjectId = toObjectId(requestId, 'requestId');
 
@@ -172,14 +205,26 @@ const approveTransferRequest = async (requestId, payload, user) => {
 
   const approverId = String(user.id ?? '');
   const currentAssigneeId = ticket?.assignedToId?.toString?.() ?? '';
-  if (currentAssigneeId !== String(request.targetAgentId?.toString?.() ?? '')) {
+  const reqR = String(request.requesterId?.toString?.() ?? '');
+  const reqT = String(request.targetAgentId?.toString?.() ?? '');
+
+  const isTakeover = currentAssigneeId === reqT && currentAssigneeId !== reqR && reqT !== '';
+  const isHandoff = currentAssigneeId === reqR && currentAssigneeId !== reqT && reqR !== '';
+
+  if (!(isTakeover || isHandoff)) {
     throw new ApiError(StatusCodes.CONFLICT, 'Ticket assignment has changed. Refresh and try again.');
   }
   if (String(request.targetAgentId?.toString?.() ?? '') !== approverId && user.role === Role.HELPDESK) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'Only the assigned helpdesk agent can approve this request');
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Only the agent who received this transfer request can approve it');
   }
 
-  await ticketService.transferTicket(ticket._id, { assignedToId: request.requesterId, note: decidedNote ?? '' }, user);
+  const nextAssigneeId = isTakeover ? request.requesterId : request.targetAgentId;
+
+  await ticketService.transferTicket(
+    ticket._id,
+    { assignedToId: nextAssigneeId, note: decidedNote ?? '', fromTransferApproval: true },
+    user,
+  );
 
   request.status = TransferRequestStatus.APPROVED;
   request.decidedById = toObjectId(user.id, 'decidedById');
@@ -191,6 +236,8 @@ const approveTransferRequest = async (requestId, payload, user) => {
 };
 
 const rejectTransferRequest = async (requestId, payload, user) => {
+  await expireStalePendingTransferRequests();
+
   const decidedNote = normalizeText(payload?.note, 'note');
   const requestObjectId = toObjectId(requestId, 'requestId');
 
@@ -210,11 +257,39 @@ const rejectTransferRequest = async (requestId, payload, user) => {
   return shapeTransferRequest(request);
 };
 
+const cancelTransferRequest = async (requestId, user) => {
+  if (!canCreateTransferRequest(user)) throw new ApiError(StatusCodes.FORBIDDEN, 'Only helpdesk agents can cancel transfer requests');
+
+  await expireStalePendingTransferRequests();
+
+  const requestObjectId = toObjectId(requestId, 'requestId');
+
+  const request = await TicketTransferRequest.findById(requestObjectId);
+  if (!request) throw new ApiError(StatusCodes.NOT_FOUND, 'Transfer request not found');
+  if (request.status !== TransferRequestStatus.PENDING) {
+    throw new ApiError(StatusCodes.CONFLICT, `Transfer request cannot be cancelled in its current state (${request.status})`);
+  }
+
+  const requesterId = String(request.requesterId ?? '');
+  if (requesterId !== String(user?.id ?? '')) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'Only the agent who sent the transfer request can cancel it');
+  }
+
+  request.status = TransferRequestStatus.CANCELLED;
+  request.decidedById = toObjectId(user.id, 'decidedById');
+  request.decidedNote = 'Cancelled by requester';
+  request.decidedAt = new Date();
+  await request.save();
+
+  return shapeTransferRequest(request);
+};
+
 module.exports = {
   createTransferRequest,
   getSentTransferRequests,
   getReceivedTransferRequests,
   approveTransferRequest,
   rejectTransferRequest,
+  cancelTransferRequest,
 };
 

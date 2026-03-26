@@ -64,6 +64,16 @@ const claimTicket = asyncHandler(async (req, res) => {
   });
 });
 
+const cancelRequesterTicket = asyncHandler(async (req, res) => {
+  const data = await ticketService.cancelRequesterTicket(req.params.id, req.user);
+
+  sendResponse(res, {
+    statusCode: StatusCodes.OK,
+    message: 'Ticket request cancelled successfully',
+    data,
+  });
+});
+
 const transferTicket = asyncHandler(async (req, res) => {
   const data = await ticketService.transferTicket(req.params.id, req.body, req.user);
 
@@ -142,6 +152,7 @@ module.exports = {
   updateTicket,
   updateStatus,
   claimTicket,
+  cancelRequesterTicket,
   transferTicket,
   resolveTicket,
   closeTicket,
