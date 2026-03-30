@@ -1,2 +1,29 @@
-# Local Docker Compose secrets (use docker.env.example as template)
+# Node dependencies
+node_modules/
+
+# Environment files (can contain secrets)
 .env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build / test outputs
+dist/
+build/
+coverage/
+
+# Backend uploads / generated assets
+uploads/*
+!uploads/.gitkeep
+generated/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+!.env.example

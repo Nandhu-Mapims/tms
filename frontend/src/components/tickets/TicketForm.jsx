@@ -1,9 +1,15 @@
 import { useEffect, useState } from 'react';
+import ManualClassificationFields from './ManualClassificationFields.jsx';
 
 function TicketForm({
   formState,
   errors,
   departmentOptions = [],
+  categoryOptions = [],
+  subcategoryOptions = [],
+  locationOptions = [],
+  useAiClassification = false,
+  onUseAiClassificationChange = () => {},
   onChange,
   onFileChange,
   onRemoveFile,
@@ -78,10 +84,38 @@ function TicketForm({
     });
   };
 
+  const issuePlaceholder = useAiClassification
+    ? 'Describe the issue clearly. AI will suggest category, subcategory, priority, and location from your text.'
+    : 'Describe the issue in detail: symptoms, impact, urgency, and any error messages.';
+  const issueHelp = useAiClassification
+    ? 'Include as much context as you can; AI classification works best with specific details.'
+    : 'Use the fields above for routing; this text becomes the ticket description.';
+
   return (
     <form onSubmit={onSubmit} className="card border-0 shadow-sm" noValidate>
       <div className="card-body p-4 p-lg-5">
         <div className="row g-4">
+          <div className="col-12">
+            <div className="form-check form-switch">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="useAiClassification"
+                checked={useAiClassification}
+                onChange={(event) => onUseAiClassificationChange(event.target.checked)}
+                disabled={isSubmitting}
+              />
+              <label className="form-check-label fw-semibold" htmlFor="useAiClassification">
+                Use AI to classify this ticket
+              </label>
+            </div>
+            <div className="form-text ms-1">
+              {useAiClassification
+                ? 'AI suggests category, priority, and related fields from your description. Turn off to choose everything yourself.'
+                : 'Standard mode: select category, subcategory, and priority below. Turn on to let AI infer them from your description.'}
+            </div>
+          </div>
           <div className="col-12 col-md-6">
             <label className="form-label fw-semibold">Send To Department</label>
             <select
@@ -103,6 +137,17 @@ function TicketForm({
               <div className="form-text">Choose which department should receive this ticket.</div>
             )}
           </div>
+          {!useAiClassification ? (
+            <ManualClassificationFields
+              formState={formState}
+              errors={errors}
+              categoryOptions={categoryOptions}
+              subcategoryOptions={subcategoryOptions}
+              locationOptions={locationOptions}
+              onChange={onChange}
+              disabled={isSubmitting}
+            />
+          ) : null}
           <div className="col-12">
             <label className="form-label fw-semibold">Tell us your issue</label>
             <textarea
@@ -111,9 +156,9 @@ function TicketForm({
               className={`form-control ${errors.prompt ? 'is-invalid' : ''}`}
               value={formState.prompt}
               onChange={handleInputChange}
-              placeholder="Describe the issue clearly. AI will choose category, department, location, and priority for you."
+              placeholder={issuePlaceholder}
             />
-            {errors.prompt ? <div className="invalid-feedback">{errors.prompt}</div> : <div className="form-text">Include symptoms, impact, and urgency. AI auto-classifies the ticket.</div>}
+            {errors.prompt ? <div className="invalid-feedback">{errors.prompt}</div> : <div className="form-text">{issueHelp}</div>}
           </div>
           <div className="col-12">
             <label className="form-label fw-semibold">Attachments (Optional)</label>

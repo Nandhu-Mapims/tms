@@ -13,6 +13,8 @@ services:
   mongo:
     image: mongo:7
     container_name: tms_mongo
+    ports:
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -27,6 +29,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: tms_backend
+    env_file:
+      - ./backend/.env
     environment:
       NODE_ENV: production
       PORT: 5000

@@ -336,7 +336,10 @@ const inferIssueType = (prompt, aiIssueType = null) => {
   return 'UNKNOWN';
 };
 
-const parseGeminiJsonResponse = (rawText) => {
+const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_REQUEST_TIMEOUT_MS = 45_000;
+
+const parseAiJsonResponse = (rawText) => {
   const text = String(rawText ?? '').trim();
   if (!text) return null;
   const fencedMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -348,49 +351,56 @@ const parseGeminiJsonResponse = (rawText) => {
   }
 };
 
-const inferClassificationWithGemini = async ({ prompt, departments, categories, subcategories, locations }) => {
-  const apiKey = String(appEnv?.geminiApiKey ?? '').trim();
+const buildGroqClassificationPrompt = ({ prompt, departments, categories, subcategories, locations }) =>
+  [
+    'Classify this hospital ticket. Return a single JSON object only, no markdown.',
+    'Valid priorities: LOW, MEDIUM, HIGH, CRITICAL.',
+    'Issue types: HARDWARE, SOFTWARE, UNKNOWN.',
+    `Prompt: ${prompt}`,
+    `Departments: ${departments.map((d) => `${d.name} (${d.code})`).join(', ')}`,
+    `Categories: ${categories.map((c) => `${c.name} (${c.code})`).join(', ')}`,
+    `Subcategories: ${subcategories.map((s) => `${s.name} (${s.code})`).join(', ')}`,
+    `Locations: ${locations.map((l) => `${l.block ?? ''}/${l.floor ?? ''}/${l.ward ?? ''}/${l.room ?? ''}`).join(', ')}`,
+    'Also extract telecom/extension number from prompt if present.',
+    'JSON shape: {"department":"...","category":"...","subcategory":"...","priority":"...","issueType":"...","location":"... or null","telecomNumber":"... or null"}',
+  ].join('\n');
+
+const inferClassificationWithGroq = async ({ prompt, departments, categories, subcategories, locations }) => {
+  const apiKey = String(appEnv?.groqApiKey ?? '').trim();
   if (!apiKey) return null;
 
-  const model = String(appEnv?.geminiModel ?? 'gemini-1.5-flash').trim();
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const model = String(appEnv?.groqModel ?? 'llama-3.3-70b-versatile').trim();
+  const userContent = buildGroqClassificationPrompt({
+    prompt,
+    departments,
+    categories,
+    subcategories,
+    locations,
+  });
   const payload = {
-    contents: [
-      {
-        parts: [
-          {
-            text: [
-              'Classify this hospital ticket. Return JSON only.',
-              'Valid priorities: LOW, MEDIUM, HIGH, CRITICAL.',
-              'Issue types: HARDWARE, SOFTWARE, UNKNOWN.',
-              `Prompt: ${prompt}`,
-              `Departments: ${departments.map((d) => `${d.name} (${d.code})`).join(', ')}`,
-              `Categories: ${categories.map((c) => `${c.name} (${c.code})`).join(', ')}`,
-              `Subcategories: ${subcategories.map((s) => `${s.name} (${s.code})`).join(', ')}`,
-              `Locations: ${locations.map((l) => `${l.block ?? ''}/${l.floor ?? ''}/${l.ward ?? ''}/${l.room ?? ''}`).join(', ')}`,
-              'Also extract telecom/extension number from prompt if present.',
-              'Response shape: {"department":"...","category":"...","subcategory":"...","priority":"...","issueType":"...","location":"... or null","telecomNumber":"... or null"}',
-            ].join('\n'),
-          },
-        ],
-      },
+    model,
+    temperature: 0.1,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You output only valid JSON for ticket classification.' },
+      { role: 'user', content: userContent },
     ],
-    generationConfig: {
-      temperature: 0.1,
-      responseMimeType: 'application/json',
-    },
   };
 
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetch(GROQ_CHAT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(GROQ_REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) return null;
     const json = await response.json();
-    const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    return parseGeminiJsonResponse(raw);
+    const raw = json?.choices?.[0]?.message?.content ?? '';
+    return parseAiJsonResponse(raw);
   } catch {
     return null;
   }
@@ -408,7 +418,7 @@ const inferTicketClassification = async (prompt) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Master data is incomplete. Please configure departments, categories, and subcategories.');
   }
 
-  const ai = await inferClassificationWithGemini({ prompt, departments, categories, subcategories, locations });
+  const ai = await inferClassificationWithGroq({ prompt, departments, categories, subcategories, locations });
   if (!ai) {
     throw new ApiError(StatusCodes.SERVICE_UNAVAILABLE, 'AI classification is temporarily unavailable. Please try again.');
   }
@@ -439,7 +449,7 @@ const inferTicketClassification = async (prompt) => {
   const subcategoryProjector = (item) => `${item?.name ?? ''} ${item?.code ?? ''}`.trim();
 
   // Conservative override: if the user text clearly looks like SOFTWARE, do not classify category as HARDWARE.
-  // This prevents cases like "my software is not working" being mapped to HW-DESK by Gemini.
+  // This prevents cases like "my software is not working" being mapped to HW-DESK by the LLM.
   const hintIssueType = inferIssueType(prompt, null);
   const softwareCategoryCandidates = categories.filter(
     (c) => String(c?.code ?? '').trim().toUpperCase() === 'SW' || String(c?.name ?? '').trim().toUpperCase() === 'SOFTWARE',
