@@ -11,26 +11,39 @@ const getIdString = (value) => {
   return candidate?.toString?.() ?? String(candidate);
 };
 
+const getUserDepartmentIdStrings = (user) => {
+  const raw = Array.isArray(user?.departmentIds) && user.departmentIds.length
+    ? user.departmentIds
+    : user?.departmentId
+      ? [user.departmentId]
+      : [];
+  return raw.map((item) => getIdString(item)).filter(Boolean);
+};
+
 const ensureCanViewTicket = (user, ticket) => {
+  if (user?.role === Role.CHIEF) {
+    return;
+  }
+
   if (user?.role === Role.HELPDESK) {
-    const userDepartmentId = getIdString(user?.departmentId);
+    const userDepartmentIds = getUserDepartmentIdStrings(user);
     const ticketDepartmentId = getIdString(ticket?.departmentId);
-    if (!userDepartmentId) {
+    if (!userDepartmentIds.length) {
       throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
     }
-    if (ticketDepartmentId && ticketDepartmentId === userDepartmentId) {
+    if (ticketDepartmentId && userDepartmentIds.includes(ticketDepartmentId)) {
       return;
     }
     throw new ApiError(StatusCodes.FORBIDDEN, 'You can view only tickets routed to your department');
   }
 
   if (user?.role === Role.HOD) {
-    const userDepartmentId = getIdString(user?.departmentId);
+    const userDepartmentIds = getUserDepartmentIdStrings(user);
     const ticketDepartmentId = getIdString(ticket?.departmentId);
-    if (!userDepartmentId) {
+    if (!userDepartmentIds.length) {
       throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
     }
-    if (ticketDepartmentId && ticketDepartmentId === userDepartmentId) {
+    if (ticketDepartmentId && userDepartmentIds.includes(ticketDepartmentId)) {
       return;
     }
     throw new ApiError(StatusCodes.FORBIDDEN, 'You can view only tickets routed to your department');
@@ -57,6 +70,13 @@ const ensureCanViewTicket = (user, ticket) => {
 
 /** Helpdesk may view any ticket but only the assigned agent may post chat or attachments. */
 const ensureCanPostTicketThread = (user, ticket) => {
+  if (user?.role === Role.CHIEF) {
+    throw new ApiError(
+      StatusCodes.FORBIDDEN,
+      'Chief role has read-only access; you cannot post messages or upload attachments on tickets.',
+    );
+  }
+
   if ([Role.ADMIN, Role.HOD].includes(user?.role)) {
     return;
   }

@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     role: { type: String, enum: Object.values(Role), required: true },
     departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
+    departmentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Department' }],
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

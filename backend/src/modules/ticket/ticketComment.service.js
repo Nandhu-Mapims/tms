@@ -1,7 +1,7 @@
 const { StatusCodes } = require('http-status-codes');
 const ApiError = require('../../utils/ApiError');
 const { ensureInternalCommentPermission, createActivityLog } = require('./ticketActivity.service');
-const { getTicketForAccess } = require('./ticket.shared');
+const { getTicketForAccess, ensureCanPostTicketThread } = require('./ticket.shared');
 const TicketComment = require('../../models/TicketComment.model');
 const User = require('../../models/User.model');
 
@@ -34,6 +34,7 @@ const addComment = async (ticketId, payload, user) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'comment is required');
   }
 
+  ensureCanPostTicketThread(user, ticket);
   ensureInternalCommentPermission(user, false);
   ensureInternalThreadWritePermission(ticket, user, isInternal);
 

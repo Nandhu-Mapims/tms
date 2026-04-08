@@ -26,6 +26,25 @@ const toObjectIdOrNull = (value, fieldName) => {
   return new mongoose.Types.ObjectId(normalized);
 };
 
+const normalizeDepartmentIdsInput = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return [];
+  const list = Array.isArray(value) ? value : [value];
+  const normalized = [];
+  list.forEach((item) => {
+    if (item === null || item === undefined || item === '') return;
+    const str = String(item);
+    if (!mongoose.Types.ObjectId.isValid(str)) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'departmentIds must contain valid ids');
+    }
+    const id = new mongoose.Types.ObjectId(str);
+    if (!normalized.some((existing) => String(existing) === String(id))) {
+      normalized.push(id);
+    }
+  });
+  return normalized;
+};
+
 const validateRole = (role) => {
   if (role !== undefined && !Object.values(Role).includes(role)) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid hospital role supplied');
@@ -42,6 +61,14 @@ const ensureDepartmentExists = async (departmentId) => {
   if (!departmentId) return;
   const exists = await Department.exists({ _id: departmentId });
   if (!exists) throw new ApiError(StatusCodes.BAD_REQUEST, 'Selected department does not exist');
+};
+
+const ensureDepartmentsExist = async (departmentIds = []) => {
+  if (!departmentIds.length) return;
+  const found = await Department.find({ _id: { $in: departmentIds } }).select('_id').lean();
+  if (found.length !== departmentIds.length) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'One or more selected departments do not exist');
+  }
 };
 
 const getAssignableUsers = async (excludeUserId = null) => {
@@ -66,7 +93,15 @@ const getUsers = async (query = {}) => {
 
   const where = {};
   if (role) where.role = role;
-  if (query.departmentId) where.departmentId = toObjectIdOrNull(query.departmentId, 'departmentId');
+  if (query.departmentId) {
+    const departmentFilterId = toObjectIdOrNull(query.departmentId, 'departmentId');
+    where.__departmentFilter = {
+      $or: [
+        { departmentId: departmentFilterId },
+        { departmentIds: { $in: [departmentFilterId] } },
+      ],
+    };
+  }
   if (query.isActive !== undefined) where.isActive = isActive;
   if (search) {
     where.$or = [
@@ -77,12 +112,30 @@ const getUsers = async (query = {}) => {
     ];
   }
 
-  const users = await User.find(where).sort({ createdAt: -1 }).populate({ path: 'departmentId', select: 'name code isActive' }).lean();
+  const mongoWhere = { ...where };
+  const and = [];
+  if (mongoWhere.__departmentFilter) {
+    and.push(mongoWhere.__departmentFilter);
+    delete mongoWhere.__departmentFilter;
+  }
+  if (mongoWhere.$or) {
+    and.push({ $or: mongoWhere.$or });
+    delete mongoWhere.$or;
+  }
+  const finalWhere = and.length ? { ...mongoWhere, $and: and } : mongoWhere;
+
+  const users = await User.find(finalWhere)
+    .sort({ createdAt: -1 })
+    .populate({ path: 'departmentId', select: 'name code isActive' })
+    .populate({ path: 'departmentIds', select: 'name code isActive' })
+    .lean();
 
   return users.map((u) => ({
     ...sanitizeUser(u),
     department: u.departmentId ?? null,
     departmentId: u.departmentId?._id?.toString?.() ?? u.departmentId ?? null,
+    departments: Array.isArray(u.departmentIds) ? u.departmentIds : [],
+    departmentIds: Array.isArray(u.departmentIds) ? u.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
   }));
 };
 
@@ -91,13 +144,18 @@ const getUserById = async (id) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'User id must be a valid id');
   }
 
-  const user = await User.findById(id).populate({ path: 'departmentId', select: 'name code isActive' }).lean();
+  const user = await User.findById(id)
+    .populate({ path: 'departmentId', select: 'name code isActive' })
+    .populate({ path: 'departmentIds', select: 'name code isActive' })
+    .lean();
   if (!user) throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
 
   return {
     ...sanitizeUser(user),
     department: user.departmentId ?? null,
     departmentId: user.departmentId?._id?.toString?.() ?? user.departmentId ?? null,
+    departments: Array.isArray(user.departmentIds) ? user.departmentIds : [],
+    departmentIds: Array.isArray(user.departmentIds) ? user.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
   };
 };
 
@@ -113,7 +171,9 @@ const updateUser = async (id, payload = {}, currentUser) => {
   if (payload.password !== undefined && payload.password !== '') validatePassword(payload.password);
 
   const departmentId = toObjectIdOrNull(payload.departmentId, 'departmentId');
+  const departmentIds = normalizeDepartmentIdsInput(payload.departmentIds);
   if (departmentId !== undefined) await ensureDepartmentExists(departmentId);
+  if (departmentIds !== undefined) await ensureDepartmentsExist(departmentIds);
 
   if (payload.email !== undefined && payload.email) {
     const normalizedEmail = payload.email.trim().toLowerCase();
@@ -141,18 +201,27 @@ const updateUser = async (id, payload = {}, currentUser) => {
   if (payload.phone !== undefined) existingUser.phone = payload.phone ? payload.phone.trim() : null;
   if (payload.role !== undefined) existingUser.role = payload.role;
   if (departmentId !== undefined) existingUser.departmentId = departmentId;
+  if (departmentIds !== undefined) {
+    existingUser.departmentIds = departmentIds;
+    if (departmentId === undefined) {
+      existingUser.departmentId = departmentIds[0] ?? null;
+    }
+  }
   if (payload.password) existingUser.password = await bcrypt.hash(payload.password, env.bcryptSaltRounds);
 
   await existingUser.save();
 
   const updated = await User.findById(existingUser._id)
     .populate({ path: 'departmentId', select: 'name code isActive' })
+    .populate({ path: 'departmentIds', select: 'name code isActive' })
     .lean();
 
   return {
     ...sanitizeUser(updated),
     department: updated.departmentId ?? null,
     departmentId: updated.departmentId?._id?.toString?.() ?? updated.departmentId ?? null,
+    departments: Array.isArray(updated.departmentIds) ? updated.departmentIds : [],
+    departmentIds: Array.isArray(updated.departmentIds) ? updated.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
   };
 };
 
@@ -177,12 +246,15 @@ const updateUserStatus = async (id, payload = {}, currentUser) => {
 
   const updated = await User.findById(existingUser._id)
     .populate({ path: 'departmentId', select: 'name code isActive' })
+    .populate({ path: 'departmentIds', select: 'name code isActive' })
     .lean();
 
   return {
     ...sanitizeUser(updated),
     department: updated.departmentId ?? null,
     departmentId: updated.departmentId?._id?.toString?.() ?? updated.departmentId ?? null,
+    departments: Array.isArray(updated.departmentIds) ? updated.departmentIds : [],
+    departmentIds: Array.isArray(updated.departmentIds) ? updated.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
   };
 };
 

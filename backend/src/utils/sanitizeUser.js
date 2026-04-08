@@ -6,6 +6,7 @@ const sanitizeUser = (user) => ({
   phone: user.phone,
   role: user.role,
   departmentId: user.departmentId,
+  departmentIds: Array.isArray(user.departmentIds) ? user.departmentIds : [],
   isActive: user.isActive,
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,

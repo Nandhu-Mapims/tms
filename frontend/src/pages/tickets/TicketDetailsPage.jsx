@@ -52,6 +52,8 @@ function TicketDetailsPage() {
   const { confirm } = useConfirmDialog();
   const { user } = useAuth();
   const isLeadershipRole = user?.role === 'HOD' || user?.role === 'ADMIN';
+  const OPERATIONS_STAFF_ROLES = ['ADMIN', 'HELPDESK', 'HOD'];
+  const isOperationsStaff = OPERATIONS_STAFF_ROLES.includes(user?.role);
   const [ticket, setTicket] = useState(null);
   const [comments, setComments] = useState([]);
   const [attachments, setAttachments] = useState([]);
@@ -474,32 +476,36 @@ function TicketDetailsPage() {
     });
   };
 
-  const canPostComments = Boolean(isStaff || isTicketRequester);
+  const canPostComments = Boolean(isOperationsStaff || isTicketRequester);
   const canUploadAttachments =
-    user?.role === 'ADMIN' || user?.role === 'HOD'
-      ? true
-      : user?.role === 'REQUESTER'
-        ? isTicketRequester
-        : user?.role === 'HELPDESK'
-          ? isAssignedToCurrentUser || !ticket?.assignedToId
-          : false;
+    user?.role === 'CHIEF'
+      ? false
+      : user?.role === 'ADMIN' || user?.role === 'HOD'
+        ? true
+        : user?.role === 'REQUESTER'
+          ? isTicketRequester
+          : user?.role === 'HELPDESK'
+            ? isAssignedToCurrentUser || !ticket?.assignedToId
+            : false;
 
   const publicComments = comments.filter((c) => !c.isInternal);
   const internalComments = comments.filter((c) => c.isInternal);
   const showStaffChat = true;
   const canPostInternalChat =
-    user?.role === 'ADMIN' || user?.role === 'HOD'
-      ? true
-      : user?.role === 'HELPDESK'
-        ? isAssignedToCurrentUser
-        : user?.role === 'REQUESTER'
-          ? isTicketRequester
-          : false;
+    user?.role === 'CHIEF'
+      ? false
+      : user?.role === 'ADMIN' || user?.role === 'HOD'
+        ? true
+        : user?.role === 'HELPDESK'
+          ? isAssignedToCurrentUser
+          : user?.role === 'REQUESTER'
+            ? isTicketRequester
+            : false;
 
   const primaryActions = [];
   const secondaryActions = [];
 
-  if (isStaff && !ticket?.assignedToId) {
+  if (isOperationsStaff && !ticket?.assignedToId) {
     primaryActions.push(
       <button
         key="claim"
@@ -701,7 +707,7 @@ function TicketDetailsPage() {
     );
   }
 
-  if (isStaff) {
+  if (isOperationsStaff) {
     if (canUpdateStatusForUser) {
       secondaryActions.push(
         <button
@@ -871,7 +877,7 @@ function TicketDetailsPage() {
           Support has marked this ticket <strong>resolved</strong>. If the issue is fixed, use <strong>Confirm fix & close</strong> to fully close it.
         </div>
       ) : null}
-      {ticket.status === 'RESOLVED' && isStaff && !isTicketRequester ? (
+      {ticket.status === 'RESOLVED' && isOperationsStaff && !isTicketRequester ? (
         <div className="alert alert-secondary mb-3">
           This ticket is resolved and waiting for the <strong>requester</strong> to confirm before it can be fully closed.
         </div>
@@ -1123,7 +1129,7 @@ function TicketDetailsPage() {
               </div>
 
               <div className="row g-3 small">
-                {user?.role === 'ADMIN' ? (
+                {user?.role === 'ADMIN' || user?.role === 'CHIEF' ? (
                   <>
                     <div className="col-md-6">
                       <span className="text-secondary d-block">Handling Department</span>

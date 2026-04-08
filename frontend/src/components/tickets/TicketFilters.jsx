@@ -9,8 +9,8 @@ function TicketFilters({
   onApply,
   onReset,
 }) {
-  const isAdmin = String(userRole ?? '') === 'ADMIN';
-  const handlingDepartmentLabel = isAdmin ? 'Handling Department' : 'Department';
+  const isOrgWideViewer = ['ADMIN', 'CHIEF'].includes(String(userRole ?? ''));
+  const handlingDepartmentLabel = isOrgWideViewer ? 'Handling Department' : 'Department';
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -76,7 +76,7 @@ function TicketFilters({
               ))}
             </select>
           </div>
-          {isAdmin ? (
+          {isOrgWideViewer ? (
             <div className="col-6 col-xl-2">
               <label className="form-label">Requester Department</label>
               <select

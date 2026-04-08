@@ -139,7 +139,7 @@ function TicketListPage() {
     ? [<Link key="create" to="/tickets/create" className="btn btn-primary">Create Ticket</Link>]
     : [];
 
-  if (user?.role && user.role !== 'REQUESTER') {
+  if (user?.role && ['ADMIN', 'HELPDESK', 'HOD'].includes(user.role)) {
     actions.push(
       <button
         key="handledByMe"

@@ -22,7 +22,7 @@ function LoginPage() {
     }
 
     if (safePath.startsWith('/admin/')) {
-      return ['ADMIN', 'HELPDESK', 'HOD'].includes(role) ? safePath : '/dashboard';
+      return ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD'].includes(role) ? safePath : '/dashboard';
     }
 
     if (safePath.startsWith('/transfer-requests') || safePath.startsWith('/leadership-assignments')) {

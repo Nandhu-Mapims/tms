@@ -78,7 +78,11 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
   const defaultState = useMemo(() => {
     const state = {};
     fields.forEach((field) => {
-      state[field.name] = initialValues?.[field.name] ?? (field.type === 'checkbox' ? false : '');
+      if (field.type === 'multiselect') {
+        state[field.name] = Array.isArray(initialValues?.[field.name]) ? initialValues[field.name] : [];
+      } else {
+        state[field.name] = initialValues?.[field.name] ?? (field.type === 'checkbox' ? false : '');
+      }
       if (field.type === 'duration') {
         const unitField = getDurationUnitFieldName(field.name);
         const derivedUnit = deriveBestUnit(state[field.name]);
@@ -101,7 +105,11 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
   }
 
   const handleChange = (field, event) => {
-    const value = field.type === 'checkbox' ? event.target.checked : event.target.value;
+    const value = field.type === 'checkbox'
+      ? event.target.checked
+      : field.type === 'multiselect'
+        ? Array.from(event.target.selectedOptions).map((opt) => opt.value)
+        : event.target.value;
     setFormState((prev) => ({ ...prev, [field.name]: value }));
     setErrors((prev) => ({ ...prev, [field.name]: '' }));
   };
@@ -186,6 +194,21 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
                             required={field.required}
                           >
                             <option value="">{field.placeholder || `Select ${field.label}`}</option>
+                            {field.options?.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : field.type === 'multiselect' ? (
+                          <select
+                            id={field.name}
+                            multiple
+                            className={`form-select ${errors[field.name] ? 'is-invalid' : ''}`}
+                            value={Array.isArray(formState[field.name]) ? formState[field.name] : []}
+                            onChange={(event) => handleChange(field, event)}
+                            required={field.required}
+                          >
                             {field.options?.map((option) => (
                               <option key={option.value} value={option.value}>
                                 {option.label}

@@ -38,6 +38,21 @@ const getMonthlyTrend = asyncHandler(async (req, res) => {
   sendResponse(res, { statusCode: StatusCodes.OK, message: 'Monthly ticket trend fetched successfully', data });
 });
 
+const getMonthlyStillActive = asyncHandler(async (req, res) => {
+  const data = await dashboardService.getMonthlyStillActive(req.user, req.query);
+  sendResponse(res, { statusCode: StatusCodes.OK, message: 'Monthly still-active trend fetched successfully', data });
+});
+
+const getDepartmentCompletion = asyncHandler(async (req, res) => {
+  const data = await dashboardService.getDepartmentCompletion(req.user);
+  sendResponse(res, { statusCode: StatusCodes.OK, message: 'Department completion stats fetched successfully', data });
+});
+
+const getDepartmentKpis = asyncHandler(async (req, res) => {
+  const data = await dashboardService.getDepartmentKpis(req.user);
+  sendResponse(res, { statusCode: StatusCodes.OK, message: 'Department KPI stats fetched successfully', data });
+});
+
 module.exports = {
   getSummary,
   getCategoryWise,
@@ -46,4 +61,7 @@ module.exports = {
   getStatusWise,
   getTechnicianPerformance,
   getMonthlyTrend,
+  getMonthlyStillActive,
+  getDepartmentCompletion,
+  getDepartmentKpis,
 };

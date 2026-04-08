@@ -17,6 +17,7 @@ import TicketListPage from '../pages/tickets/TicketListPage.jsx';
 import HodToHodTicketsPage from '../pages/tickets/HodToHodTicketsPage.jsx';
 import TransferRequestsPage from '../pages/tickets/TransferRequestsPage.jsx';
 import LeadershipAssignmentsPage from '../pages/tickets/LeadershipAssignmentsPage.jsx';
+import ReportsPage from '../pages/reports/ReportsPage.jsx';
 
 function AppRoutes() {
   return (
@@ -24,10 +25,11 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-      <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER']} />}>
+      <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'CHIEF', 'HELPDESK', 'HOD', 'REQUESTER']} />}>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="/tickets" element={<TicketListPage />} />
           <Route element={<ProtectedRoute allowedRoles={['HOD']} />}>
             <Route path="/hod-to-hod-tickets" element={<HodToHodTicketsPage />} />
@@ -43,7 +45,7 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'HELPDESK', 'HOD']} />}>
+      <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'CHIEF', 'HELPDESK', 'HOD']} />}>
         <Route element={<MainLayout />}>
           <Route path="/admin/departments" element={<DepartmentsPage />} />
           <Route path="/admin/categories" element={<CategoriesPage />} />

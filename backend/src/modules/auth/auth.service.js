@@ -25,18 +25,17 @@ const validateRole = (role) => {
   }
 };
 
-const normalizeDepartmentId = (departmentId) => {
-  if (departmentId === undefined || departmentId === null || departmentId === '') {
-    return null;
-  }
-
-  const parsedDepartmentId = Number(departmentId);
-
-  if (!Number.isInteger(parsedDepartmentId) || parsedDepartmentId <= 0) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, 'departmentId must be a valid positive integer');
-  }
-
-  return parsedDepartmentId;
+const normalizeDepartmentIds = (departmentIds, departmentId) => {
+  const source = departmentIds !== undefined ? departmentIds : departmentId;
+  if (source === undefined || source === null || source === '') return [];
+  const list = Array.isArray(source) ? source : [source];
+  const normalized = [];
+  list.forEach((item) => {
+    if (item === undefined || item === null || item === '') return;
+    const str = String(item);
+    normalized.push(str);
+  });
+  return [...new Set(normalized)];
 };
 
 const registerUser = async (payload) => {
@@ -54,8 +53,8 @@ const registerUser = async (payload) => {
 
   const normalizedEmpId = normalizeEmpId(empId);
   const normalizedEmail = email ? email.trim().toLowerCase() : null;
-  // Mongo uses ObjectId; keep null for missing values and let later modules validate.
-  const normalizedDepartmentId = departmentId ? String(departmentId) : null;
+  const normalizedDepartmentIds = normalizeDepartmentIds(payload.departmentIds, departmentId);
+  const normalizedDepartmentId = normalizedDepartmentIds[0] ?? null;
 
   const [existingEmpId, existingEmail] = await Promise.all([
     User.findOne({ empId: normalizedEmpId }).lean(),
@@ -80,6 +79,7 @@ const registerUser = async (payload) => {
     password: hashedPassword,
     role,
     departmentId: normalizedDepartmentId,
+    departmentIds: normalizedDepartmentIds,
   });
 
   return sanitizeUser(user);

@@ -2,6 +2,7 @@
 
 const Role = Object.freeze({
   ADMIN: 'ADMIN',
+  CHIEF: 'CHIEF',
   HELPDESK: 'HELPDESK',
   HOD: 'HOD',
   REQUESTER: 'REQUESTER',

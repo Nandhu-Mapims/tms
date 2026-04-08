@@ -33,6 +33,15 @@ const toObjectId = (value, fieldName) => {
   return new mongoose.Types.ObjectId(normalized);
 };
 
+const getUserDepartmentObjectIds = (user) => {
+  const raw = Array.isArray(user?.departmentIds) && user.departmentIds.length
+    ? user.departmentIds
+    : user?.departmentId
+      ? [user.departmentId]
+      : [];
+  return raw.map((item) => toObjectId(item, 'departmentId'));
+};
+
 const validatePriority = (priority) => {
   if (!Object.values(Priority).includes(priority)) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid priority supplied');
@@ -607,17 +616,19 @@ const buildScopedWhere = (user) => {
   const where = {};
   if (user.role === Role.REQUESTER) where.requesterId = toObjectId(user.id, 'userId');
   if (user.role === Role.HELPDESK) {
-    if (!user?.departmentId) {
+    const departmentIds = getUserDepartmentObjectIds(user);
+    if (!departmentIds.length) {
       throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
     }
-    where.departmentId = toObjectId(user.departmentId, 'helpdeskDepartmentId');
+    where.departmentId = { $in: departmentIds };
   }
   if (user.role === Role.HOD) {
-    if (!user?.departmentId) {
+    const departmentIds = getUserDepartmentObjectIds(user);
+    if (!departmentIds.length) {
       throw new ApiError(StatusCodes.FORBIDDEN, 'Your account has no department assigned. Please contact admin.');
     }
     // HOD sees tickets routed to their department.
-    where.departmentId = toObjectId(user.departmentId, 'hodDepartmentId');
+    where.departmentId = { $in: departmentIds };
   }
   return where;
 };
@@ -662,7 +673,8 @@ const createTicket = async (payload, user) => {
   }
 
   // Capture requester's department separately from the routed "send to" department.
-  if (!user?.departmentId) {
+  const requesterDepartmentId = getUserDepartmentObjectIds(user)[0] ?? null;
+  if (!requesterDepartmentId) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Your account has no department assigned. Please contact admin.');
   }
 
@@ -678,12 +690,12 @@ const createTicket = async (payload, user) => {
 
   const ticketNumber = await generateTicketNumber(category.code ?? 'GEN');
   const creatorUserId = toObjectId(user.id, 'userId');
-  const requesterDepartmentId = toObjectId(user.departmentId, 'requesterDepartmentId');
+  const requesterDepartmentIdForCreate = toObjectId(requesterDepartmentId, 'requesterDepartmentId');
   let assignedToIdForCreate = null;
 
   if (user.role === Role.HOD) {
     const targetDepartmentId = toObjectId(inferred.departmentId, 'departmentId');
-    const isSameDepartment = String(targetDepartmentId) === String(requesterDepartmentId);
+    const isSameDepartment = String(targetDepartmentId) === String(requesterDepartmentIdForCreate);
 
     if (isSameDepartment) {
       assignedToIdForCreate = creatorUserId;
@@ -711,7 +723,7 @@ const createTicket = async (payload, user) => {
     priority: inferred.priority,
     status: TicketStatus.OPEN,
     departmentId: inferred.departmentId,
-    requesterDepartmentId,
+    requesterDepartmentId: requesterDepartmentIdForCreate,
     categoryId: inferred.categoryId,
     subcategoryId: inferred.subcategoryId,
     locationId: inferred.locationId,
@@ -765,7 +777,7 @@ const getTickets = async (query, user) => {
     where.assignedToId = toObjectId(query.assignedToId, 'assignedToId');
   }
 
-  if (query?.requesterRole && [Role.HOD, Role.ADMIN].includes(user?.role)) {
+  if (query?.requesterRole && [Role.HOD, Role.ADMIN, Role.CHIEF].includes(user?.role)) {
     const normalizedRequesterRole = String(query.requesterRole ?? '').trim().toUpperCase();
     if (![Role.HOD].includes(normalizedRequesterRole)) {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid requesterRole supplied');
@@ -778,7 +790,7 @@ const getTickets = async (query, user) => {
     where.requesterId = requesterIds.length ? { $in: requesterIds } : { $in: [] };
   }
 
-  if (query?.assignedRole && [Role.HOD, Role.ADMIN].includes(user?.role)) {
+  if (query?.assignedRole && [Role.HOD, Role.ADMIN, Role.CHIEF].includes(user?.role)) {
     const normalizedAssignedRole = String(query.assignedRole ?? '').trim().toUpperCase();
     if (![Role.HOD].includes(normalizedAssignedRole)) {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid assignedRole supplied');

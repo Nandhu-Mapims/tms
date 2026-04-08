@@ -12,5 +12,8 @@ router.get('/priority-wise', dashboardController.getPriorityWise);
 router.get('/status-wise', dashboardController.getStatusWise);
 router.get('/technician-performance', dashboardController.getTechnicianPerformance);
 router.get('/monthly-trend', dashboardController.getMonthlyTrend);
+router.get('/monthly-still-active', dashboardController.getMonthlyStillActive);
+router.get('/department-completion', dashboardController.getDepartmentCompletion);
+router.get('/department-kpis', dashboardController.getDepartmentKpis);
 
 module.exports = router;

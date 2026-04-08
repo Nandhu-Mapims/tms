@@ -4,6 +4,7 @@ Run `npm run seed` inside `backend` to wipe and reseed the database with the new
 
 ## Default passwords
 
+- Chief: `Chief@12345` (or `SEED_CHIEF_PASSWORD` from `backend/.env`)
 - Admin: `Admin@12345` (or `SEED_ADMIN_PASSWORD` from `backend/.env`)
 - Helpdesk: `Helpdesk@12345` (or `SEED_HELPDESK_PASSWORD`)
 - HOD: `Hod@12345` (or `SEED_HOD_PASSWORD`)
@@ -13,6 +14,7 @@ Run `npm run seed` inside `backend` to wipe and reseed the database with the new
 
 | Role | Name | Emp ID | Email | Department |
 | --- | --- | --- | --- | --- |
+| CHIEF | Chief Executive | `10017` | chief@tmshospital.com | IT |
 | ADMIN | System Administrator | `10001` | admin@tmshospital.com | IT |
 | HELPDESK | IT Helpdesk Agent | `10002` | helpdesk.it@tmshospital.com | IT |
 | HELPDESK | IT Helpdesk Agent Two | `10011` | helpdesk2.it@tmshospital.com | IT |

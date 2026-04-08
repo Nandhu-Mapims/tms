@@ -30,6 +30,21 @@ export const getDashboardMonthlyTrend = async (months = 6) => {
   return response.data;
 };
 
+export const getDashboardMonthlyStillActive = async (months = 6) => {
+  const response = await apiClient.get('/dashboard/monthly-still-active', { params: { months } });
+  return response.data;
+};
+
+export const getDashboardDepartmentCompletion = async () => {
+  const response = await apiClient.get('/dashboard/department-completion');
+  return response.data;
+};
+
+export const getDashboardDepartmentKpis = async () => {
+  const response = await apiClient.get('/dashboard/department-kpis');
+  return response.data;
+};
+
 export const getDashboardTechnicianPerformance = async () => {
   const response = await apiClient.get('/dashboard/technician-performance');
   return response.data;

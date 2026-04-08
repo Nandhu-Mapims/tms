@@ -3,7 +3,7 @@ const { Role } = require('../models/enums');
 const asyncHandler = require('./asyncHandler');
 const { protect, authorizeRoles } = require('../middlewares/auth.middleware');
 
-const VIEW_ROLES = [Role.ADMIN, Role.HELPDESK, Role.HOD, Role.REQUESTER];
+const VIEW_ROLES = [Role.ADMIN, Role.CHIEF, Role.HELPDESK, Role.HOD, Role.REQUESTER];
 
 const createMasterRouter = (controller) => {
   const router = express.Router();

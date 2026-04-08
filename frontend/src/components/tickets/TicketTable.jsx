@@ -4,8 +4,8 @@ import { getTimeTakenLabel } from '../../utils/ticketHelpers';
 
 function TicketTable({ tickets, userId = '', userRole = '', onCancelRequest = null, isCancelling = false }) {
   const normalizedUserId = String(userId ?? '');
-  const isAdmin = String(userRole ?? '') === 'ADMIN';
-  const showHandlingAndRequester = isAdmin;
+  const isOrgWideViewer = ['ADMIN', 'CHIEF'].includes(String(userRole ?? ''));
+  const showHandlingAndRequester = isOrgWideViewer;
 
   return (
     <div className="card border-0 shadow-sm">

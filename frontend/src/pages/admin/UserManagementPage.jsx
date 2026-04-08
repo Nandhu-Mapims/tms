@@ -49,25 +49,29 @@ function UserManagementPage() {
   }, [appliedSearch]);
 
   const submitCreate = async (payload) => {
+    const departmentIds = Array.isArray(payload.departmentIds) ? payload.departmentIds.filter(Boolean) : [];
     await registerUserRequest({
       ...payload,
       fullName: payload.fullName.trim(),
       empId: payload.empId.trim(),
       email: payload.email ? payload.email.trim() : '',
       phone: payload.phone ? payload.phone.trim() : '',
-      departmentId: payload.departmentId ? Number(payload.departmentId) : null,
+      departmentId: departmentIds[0] || null,
+      departmentIds,
     });
     await loadItems();
   };
 
   const submitUpdate = async (item, payload) => {
+    const departmentIds = Array.isArray(payload.departmentIds) ? payload.departmentIds.filter(Boolean) : [];
     const updatePayload = {
       fullName: payload.fullName.trim(),
       empId: payload.empId.trim(),
       email: payload.email ? payload.email.trim() : '',
       phone: payload.phone ? payload.phone.trim() : '',
       role: payload.role,
-      departmentId: payload.departmentId ? Number(payload.departmentId) : null,
+      departmentId: departmentIds[0] || null,
+      departmentIds,
     };
 
     if (payload.password) {
@@ -96,7 +100,10 @@ function UserManagementPage() {
         {
           key: 'department',
           label: 'Department',
-          render: (item) => item.department?.name || 'Not assigned',
+          render: (item) =>
+            Array.isArray(item.departments) && item.departments.length
+              ? item.departments.map((d) => d?.name).filter(Boolean).join(', ')
+              : item.department?.name || 'Not assigned',
         },
         { key: 'phone', label: 'Phone' },
       ]}
@@ -120,16 +127,16 @@ function UserManagementPage() {
           label: 'Role',
           type: 'select',
           required: true,
-          options: ['ADMIN', 'HELPDESK', 'HOD', 'REQUESTER'].map((value) => ({ value, label: value })),
+          options: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD', 'REQUESTER'].map((value) => ({ value, label: value })),
           colClass: 'col-md-6',
         },
         {
-          name: 'departmentId',
-          label: 'Department',
-          type: 'select',
+          name: 'departmentIds',
+          label: 'Departments',
+          type: 'multiselect',
           options: departmentOptions,
           colClass: 'col-md-6',
-          placeholder: 'Select department',
+          helpText: 'For CHIEF, HELPDESK, and HOD you can select multiple departments.',
         },
         {
           name: 'password',

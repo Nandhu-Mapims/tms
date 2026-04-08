@@ -80,6 +80,7 @@ const LOCATIONS = [
 ];
 
 const USER_SPECS = [
+  { fullName: 'Chief Executive', empId: '10017', email: 'chief@tmshospital.com', role: Role.CHIEF, deptCode: 'IT', pwdKey: 'CHIEF' },
   { fullName: 'System Administrator', empId: '10001', email: 'admin@tmshospital.com', role: Role.ADMIN, deptCode: 'IT', pwdKey: 'ADMIN' },
   { fullName: 'IT Helpdesk Agent', empId: '10002', email: 'helpdesk.it@tmshospital.com', role: Role.HELPDESK, deptCode: 'IT', pwdKey: 'HELPDESK' },
   { fullName: 'IT Helpdesk Agent Two', empId: '10011', email: 'helpdesk2.it@tmshospital.com', role: Role.HELPDESK, deptCode: 'IT', pwdKey: 'HELPDESK' },
@@ -334,12 +335,14 @@ const seed = async () => {
   const subcategoryByCode = Object.fromEntries(createdSubcategories.map((item) => [item.code, item]));
 
   const passwords = {
+    CHIEF: process.env.SEED_CHIEF_PASSWORD ?? 'Chief@12345',
     ADMIN: process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345',
     HELPDESK: process.env.SEED_HELPDESK_PASSWORD ?? 'Helpdesk@12345',
     HOD: process.env.SEED_HOD_PASSWORD ?? 'Hod@12345',
     REQUESTER: process.env.SEED_REQUESTER_PASSWORD ?? 'User@12345',
   };
   const passwordHashes = {
+    CHIEF: await hashWith(passwords.CHIEF),
     ADMIN: await hashWith(passwords.ADMIN),
     HELPDESK: await hashWith(passwords.HELPDESK),
     HOD: await hashWith(passwords.HOD),
@@ -407,6 +410,7 @@ const seed = async () => {
   console.log(`Locations: ${locations.length}`);
   console.log(`Users: ${users.length}`);
   console.log(`Tickets: ${TICKET_SPECS.length}`);
+  console.log(`Chief login => empId: 10017, password: ${passwords.CHIEF}`);
   console.log(`Admin login => empId: 10001, password: ${passwords.ADMIN}`);
 };
 
