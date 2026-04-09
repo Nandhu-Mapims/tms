@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import EntityManagementPage from '../../components/admin/EntityManagementPage.jsx';
 import { useToast } from '../../hooks/useToast';
-import { getDepartments } from '../../services/masterDataService';
+import { getDepartments, getSubDepartments } from '../../services/masterDataService';
 import { getUsersRequest, registerUserRequest, updateUserRequest, updateUserStatusRequest } from '../../services/authService';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import { validateFiveDigitEmpId } from '../../utils/validators';
@@ -10,6 +10,7 @@ function UserManagementPage() {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [subDepartments, setSubDepartments] = useState([]);
   const [search, setSearch] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -24,16 +25,27 @@ function UserManagementPage() {
     [departments]
   );
 
+  const subDepartmentOptions = useMemo(
+    () =>
+      subDepartments.map((sd) => ({
+        value: sd.id,
+        label: `${sd.name} (${sd.code})${sd.department ? ` — ${sd.department.name}` : ''}`,
+      })),
+    [subDepartments]
+  );
+
   const loadItems = async () => {
     setIsLoading(true);
     try {
-      const [usersResponse, departmentsResponse] = await Promise.all([
+      const [usersResponse, departmentsResponse, subDepartmentsResponse] = await Promise.all([
         getUsersRequest({ search: appliedSearch }),
         getDepartments({ isActive: true }),
+        getSubDepartments({ isActive: true }),
       ]);
 
       setItems(usersResponse.data);
       setDepartments(departmentsResponse.data);
+      setSubDepartments(subDepartmentsResponse.data);
       setErrorMessage('');
     } catch (error) {
       const message = getErrorMessage(error, 'Unable to load users.');
@@ -58,6 +70,7 @@ function UserManagementPage() {
       phone: payload.phone ? payload.phone.trim() : '',
       departmentId: departmentIds[0] || null,
       departmentIds,
+      subDepartmentId: payload.subDepartmentId || null,
     });
     await loadItems();
   };
@@ -72,6 +85,7 @@ function UserManagementPage() {
       role: payload.role,
       departmentId: departmentIds[0] || null,
       departmentIds,
+      subDepartmentId: payload.subDepartmentId || null,
     };
 
     if (payload.password) {
@@ -103,7 +117,12 @@ function UserManagementPage() {
           render: (item) =>
             Array.isArray(item.departments) && item.departments.length
               ? item.departments.map((d) => d?.name).filter(Boolean).join(', ')
-              : item.department?.name || 'Not assigned',
+              : item.department?.name || '—',
+        },
+        {
+          key: 'subDepartment',
+          label: 'Sub-Department',
+          render: (item) => item.subDepartment?.name || '—',
         },
         { key: 'phone', label: 'Phone' },
       ]}
@@ -137,6 +156,14 @@ function UserManagementPage() {
           options: departmentOptions,
           colClass: 'col-md-6',
           helpText: 'For CHIEF, HELPDESK, and HOD you can select multiple departments.',
+        },
+        {
+          name: 'subDepartmentId',
+          label: 'Sub-Department',
+          type: 'select',
+          options: subDepartmentOptions,
+          colClass: 'col-md-6',
+          helpText: 'Optional. Select a sub-department if applicable.',
         },
         {
           name: 'password',

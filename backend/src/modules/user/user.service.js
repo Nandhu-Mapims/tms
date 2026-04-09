@@ -128,6 +128,7 @@ const getUsers = async (query = {}) => {
     .sort({ createdAt: -1 })
     .populate({ path: 'departmentId', select: 'name code isActive' })
     .populate({ path: 'departmentIds', select: 'name code isActive' })
+    .populate({ path: 'subDepartmentId', select: 'name code isActive departmentId' })
     .lean();
 
   return users.map((u) => ({
@@ -136,6 +137,8 @@ const getUsers = async (query = {}) => {
     departmentId: u.departmentId?._id?.toString?.() ?? u.departmentId ?? null,
     departments: Array.isArray(u.departmentIds) ? u.departmentIds : [],
     departmentIds: Array.isArray(u.departmentIds) ? u.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
+    subDepartment: u.subDepartmentId ?? null,
+    subDepartmentId: u.subDepartmentId?._id?.toString?.() ?? u.subDepartmentId ?? null,
   }));
 };
 
@@ -147,6 +150,7 @@ const getUserById = async (id) => {
   const user = await User.findById(id)
     .populate({ path: 'departmentId', select: 'name code isActive' })
     .populate({ path: 'departmentIds', select: 'name code isActive' })
+    .populate({ path: 'subDepartmentId', select: 'name code isActive departmentId' })
     .lean();
   if (!user) throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
 
@@ -156,6 +160,8 @@ const getUserById = async (id) => {
     departmentId: user.departmentId?._id?.toString?.() ?? user.departmentId ?? null,
     departments: Array.isArray(user.departmentIds) ? user.departmentIds : [],
     departmentIds: Array.isArray(user.departmentIds) ? user.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
+    subDepartment: user.subDepartmentId ?? null,
+    subDepartmentId: user.subDepartmentId?._id?.toString?.() ?? user.subDepartmentId ?? null,
   };
 };
 
@@ -209,11 +215,15 @@ const updateUser = async (id, payload = {}, currentUser) => {
   }
   if (payload.password) existingUser.password = await bcrypt.hash(payload.password, env.bcryptSaltRounds);
 
+  const subDepartmentId = toObjectIdOrNull(payload.subDepartmentId, 'subDepartmentId');
+  if (subDepartmentId !== undefined) existingUser.subDepartmentId = subDepartmentId;
+
   await existingUser.save();
 
   const updated = await User.findById(existingUser._id)
     .populate({ path: 'departmentId', select: 'name code isActive' })
     .populate({ path: 'departmentIds', select: 'name code isActive' })
+    .populate({ path: 'subDepartmentId', select: 'name code isActive departmentId' })
     .lean();
 
   return {
@@ -222,6 +232,8 @@ const updateUser = async (id, payload = {}, currentUser) => {
     departmentId: updated.departmentId?._id?.toString?.() ?? updated.departmentId ?? null,
     departments: Array.isArray(updated.departmentIds) ? updated.departmentIds : [],
     departmentIds: Array.isArray(updated.departmentIds) ? updated.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
+    subDepartment: updated.subDepartmentId ?? null,
+    subDepartmentId: updated.subDepartmentId?._id?.toString?.() ?? updated.subDepartmentId ?? null,
   };
 };
 
@@ -247,6 +259,7 @@ const updateUserStatus = async (id, payload = {}, currentUser) => {
   const updated = await User.findById(existingUser._id)
     .populate({ path: 'departmentId', select: 'name code isActive' })
     .populate({ path: 'departmentIds', select: 'name code isActive' })
+    .populate({ path: 'subDepartmentId', select: 'name code isActive departmentId' })
     .lean();
 
   return {
@@ -255,6 +268,8 @@ const updateUserStatus = async (id, payload = {}, currentUser) => {
     departmentId: updated.departmentId?._id?.toString?.() ?? updated.departmentId ?? null,
     departments: Array.isArray(updated.departmentIds) ? updated.departmentIds : [],
     departmentIds: Array.isArray(updated.departmentIds) ? updated.departmentIds.map((d) => d?._id?.toString?.() ?? String(d)).filter(Boolean) : [],
+    subDepartment: updated.subDepartmentId ?? null,
+    subDepartmentId: updated.subDepartmentId?._id?.toString?.() ?? updated.subDepartmentId ?? null,
   };
 };
 

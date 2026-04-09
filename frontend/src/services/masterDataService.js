@@ -11,6 +11,26 @@ export const getDepartments = async (params = {}) => {
   return response.data;
 };
 
+export const getSubDepartments = async (params = {}) => {
+  const response = await apiClient.get('/sub-departments', { params });
+  return response.data;
+};
+
+export const createSubDepartment = async (payload) => {
+  const response = await apiClient.post('/sub-departments', payload, jsonConfig);
+  return response.data;
+};
+
+export const updateSubDepartment = async (id, payload) => {
+  const response = await apiClient.put(`/sub-departments/${id}`, payload, jsonConfig);
+  return response.data;
+};
+
+export const deleteSubDepartment = async (id) => {
+  const response = await apiClient.delete(`/sub-departments/${id}`);
+  return response.data;
+};
+
 export const getCategories = async (params = {}) => {
   const response = await apiClient.get('/categories', { params });
   return response.data;

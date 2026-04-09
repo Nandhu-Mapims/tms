@@ -22,6 +22,7 @@ const createMasterController = (service, entityLabel) => ({
       search: req.query.search,
       isActive: parseBoolean(req.query.isActive),
       categoryId: req.query.categoryId,
+      departmentId: req.query.departmentId,
     };
 
     const result = await service.getAll(filters, req.user);

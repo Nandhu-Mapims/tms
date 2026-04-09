@@ -1,5 +1,3 @@
-// Manual ticket classification inputs (category, priority, location) when AI assist is off.
-
 const PRIORITY_OPTIONS = [
   { value: 'LOW', label: 'Low' },
   { value: 'MEDIUM', label: 'Medium' },
@@ -7,19 +5,11 @@ const PRIORITY_OPTIONS = [
   { value: 'CRITICAL', label: 'Critical' },
 ];
 
-const ISSUE_TYPE_OPTIONS = [
-  { value: '', label: 'Infer from description' },
-  { value: 'HARDWARE', label: 'Hardware' },
-  { value: 'SOFTWARE', label: 'Software' },
-  { value: 'UNKNOWN', label: 'Not sure' },
-];
-
 function ManualClassificationFields({
   formState,
   errors,
   categoryOptions = [],
   subcategoryOptions = [],
-  locationOptions = [],
   onChange,
   disabled = false,
 }) {
@@ -30,19 +20,6 @@ function ManualClassificationFields({
 
   return (
     <>
-      <div className="col-12 col-md-6">
-        <label className="form-label fw-semibold">Title (optional)</label>
-        <input
-          type="text"
-          name="title"
-          className={`form-control ${errors.title ? 'is-invalid' : ''}`}
-          value={formState.title ?? ''}
-          onChange={handleInputChange}
-          placeholder="Short summary"
-          disabled={disabled}
-        />
-        {errors.title ? <div className="invalid-feedback">{errors.title}</div> : <div className="form-text">If empty, the first part of your description is used.</div>}
-      </div>
       <div className="col-12 col-md-6">
         <label className="form-label fw-semibold">Category</label>
         <select
@@ -98,42 +75,18 @@ function ManualClassificationFields({
         {errors.priority ? <div className="invalid-feedback">{errors.priority}</div> : null}
       </div>
       <div className="col-12 col-md-6">
-        <label className="form-label fw-semibold">Issue type</label>
-        <select
-          name="issueType"
-          className={`form-select ${errors.issueType ? 'is-invalid' : ''}`}
-          value={formState.issueType ?? ''}
-          onChange={handleInputChange}
-          disabled={disabled}
-        >
-          {ISSUE_TYPE_OPTIONS.map((opt) => (
-            <option key={opt.value || 'infer'} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        {errors.issueType ? <div className="invalid-feedback">{errors.issueType}</div> : (
-          <div className="form-text">Choose Hardware if the ticket needs a physical location (e.g. ward, room).</div>
-        )}
-      </div>
-      <div className="col-12 col-md-6">
         <label className="form-label fw-semibold">Location (optional)</label>
-        <select
-          name="locationId"
-          className={`form-select ${errors.locationId ? 'is-invalid' : ''}`}
-          value={formState.locationId ?? ''}
+        <input
+          type="text"
+          name="locationText"
+          className={`form-control ${errors.locationText ? 'is-invalid' : ''}`}
+          value={formState.locationText ?? ''}
           onChange={handleInputChange}
+          placeholder="e.g. Ward B, Room 12, 2nd Floor"
           disabled={disabled}
-        >
-          <option value="">No specific location</option>
-          {locationOptions.map((item) => (
-            <option key={item.id} value={item.id}>
-              {[item.block, item.floor, item.ward, item.room, item.unit].filter(Boolean).join(' · ') || item.name || item.id}
-            </option>
-          ))}
-        </select>
-        {errors.locationId ? <div className="invalid-feedback">{errors.locationId}</div> : (
-          <div className="form-text">Required when issue type is Hardware.</div>
+        />
+        {errors.locationText ? <div className="invalid-feedback">{errors.locationText}</div> : (
+          <div className="form-text">Type the ward, room, floor, or block where the issue is.</div>
         )}
       </div>
     </>

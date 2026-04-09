@@ -7,6 +7,7 @@ import ProtectedRoute from '../components/auth/ProtectedRoute.jsx';
 import MainLayout from '../components/layout/MainLayout.jsx';
 import CategoriesPage from '../pages/admin/CategoriesPage.jsx';
 import DepartmentsPage from '../pages/admin/DepartmentsPage.jsx';
+import SubDepartmentsPage from '../pages/admin/SubDepartmentsPage.jsx';
 import LocationsPage from '../pages/admin/LocationsPage.jsx';
 import SlaSettingsPage from '../pages/admin/SlaSettingsPage.jsx';
 import SubcategoriesPage from '../pages/admin/SubcategoriesPage.jsx';
@@ -29,7 +30,9 @@ function AppRoutes() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
+          <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'CHIEF']} />}>
+            <Route path="/reports" element={<ReportsPage />} />
+          </Route>
           <Route path="/tickets" element={<TicketListPage />} />
           <Route element={<ProtectedRoute allowedRoles={['HOD']} />}>
             <Route path="/hod-to-hod-tickets" element={<HodToHodTicketsPage />} />
@@ -48,6 +51,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute allowedRoles={['ADMIN', 'CHIEF', 'HELPDESK', 'HOD']} />}>
         <Route element={<MainLayout />}>
           <Route path="/admin/departments" element={<DepartmentsPage />} />
+          <Route path="/admin/sub-departments" element={<SubDepartmentsPage />} />
           <Route path="/admin/categories" element={<CategoriesPage />} />
           <Route path="/admin/subcategories" element={<SubcategoriesPage />} />
           <Route path="/admin/locations" element={<LocationsPage />} />

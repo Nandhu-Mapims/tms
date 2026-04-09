@@ -2,7 +2,8 @@ const { StatusCodes } = require('http-status-codes');
 const mongoose = require('mongoose');
 const ApiError = require('../../utils/ApiError');
 const parseBoolean = require('../../utils/parseBoolean');
-const Category = require('../../models/Category.model');
+const Department = require('../../models/Department.model');
+const SubDepartment = require('../../models/SubDepartment.model');
 
 const normalizeText = (value) => (typeof value === 'string' ? value.trim() : value);
 const normalizeCode = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : value);
@@ -30,9 +31,11 @@ const buildInput = (payload, isCreate = false) => {
   if (payload?.description !== undefined) data.description = normalizeText(payload.description) || null;
   if (payload?.isActive !== undefined) data.isActive = parseBoolean(payload.isActive);
 
-  if (payload?.departmentId !== undefined) {
-    data.departmentId = payload.departmentId ? toObjectId(payload.departmentId, 'departmentId') : null;
+  const departmentId = toObjectId(payload?.departmentId, 'departmentId');
+  if (isCreate && !departmentId) {
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'departmentId is required');
   }
+  if (departmentId !== undefined) data.departmentId = departmentId;
 
   return data;
 };
@@ -43,9 +46,8 @@ const buildWhere = (filters = {}) => {
 
   if (filters.isActive !== undefined) where.isActive = filters.isActive;
 
-  if (filters.departmentId) {
-    where.departmentId = toObjectId(filters.departmentId, 'departmentId');
-  }
+  const departmentId = filters.departmentId ? toObjectId(filters.departmentId, 'departmentId') : undefined;
+  if (departmentId) where.departmentId = departmentId;
 
   if (search) {
     where.$or = [
@@ -58,53 +60,68 @@ const buildWhere = (filters = {}) => {
   return where;
 };
 
+const ensureDepartmentExists = async (departmentId) => {
+  if (!departmentId) return;
+  const exists = await Department.exists({ _id: departmentId, isActive: true });
+  if (!exists) throw new ApiError(StatusCodes.BAD_REQUEST, 'departmentId is invalid');
+};
+
 const shape = (doc) => ({
   ...(doc ?? {}),
   id: doc?._id?.toString?.() ?? doc?.id,
 });
 
-const populateAndShape = (doc) => {
-  const shaped = shape(doc);
-  if (doc.departmentId && typeof doc.departmentId === 'object' && doc.departmentId._id) {
-    shaped.department = doc.departmentId;
-    shaped.departmentId = doc.departmentId._id?.toString?.() ?? doc.departmentId;
-  }
-  return shaped;
-};
-
 module.exports = {
-  create: async (payload) => shape((await Category.create(buildInput(payload, true))).toObject()),
+  create: async (payload) => {
+    const input = buildInput(payload, true);
+    await ensureDepartmentExists(input.departmentId);
+    return shape((await SubDepartment.create(input)).toObject());
+  },
   getAll: async (filters) => {
     const where = buildWhere(filters);
     const [items, total] = await Promise.all([
-      Category.find(where)
-        .sort({ name: 1 })
+      SubDepartment.find(where)
+        .sort({ departmentId: 1, name: 1 })
         .populate({ path: 'departmentId', select: 'name code isActive' })
         .lean(),
-      Category.countDocuments(where),
+      SubDepartment.countDocuments(where),
     ]);
-    return { items: items.map(populateAndShape), total };
+    return {
+      items: items.map((s) => ({
+        ...shape(s),
+        department: s.departmentId ?? null,
+        departmentId: s.departmentId?._id?.toString?.() ?? s.departmentId,
+      })),
+      total,
+    };
   },
   getById: async (id) => {
-    const record = await Category.findById(id)
+    const record = await SubDepartment.findById(id)
       .populate({ path: 'departmentId', select: 'name code isActive' })
       .lean();
-    if (!record) throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
-    return populateAndShape(record);
+    if (!record) throw new ApiError(StatusCodes.NOT_FOUND, 'Sub-department not found');
+    return {
+      ...shape(record),
+      department: record.departmentId ?? null,
+      departmentId: record.departmentId?._id?.toString?.() ?? record.departmentId,
+    };
   },
   update: async (id, payload) => {
-    const updated = await Category.findByIdAndUpdate(id, buildInput(payload, false), {
-      new: true,
-      runValidators: true,
-    })
+    const input = buildInput(payload, false);
+    if (input.departmentId) await ensureDepartmentExists(input.departmentId);
+    const updated = await SubDepartment.findByIdAndUpdate(id, input, { new: true, runValidators: true })
       .populate({ path: 'departmentId', select: 'name code isActive' })
       .lean();
-    if (!updated) throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
-    return populateAndShape(updated);
+    if (!updated) throw new ApiError(StatusCodes.NOT_FOUND, 'Sub-department not found');
+    return {
+      ...shape(updated),
+      department: updated.departmentId ?? null,
+      departmentId: updated.departmentId?._id?.toString?.() ?? updated.departmentId,
+    };
   },
   remove: async (id) => {
-    const deleted = await Category.findByIdAndDelete(id).lean();
-    if (!deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Category not found');
+    const deleted = await SubDepartment.findByIdAndDelete(id).lean();
+    if (!deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Sub-department not found');
     return shape(deleted);
   },
 };

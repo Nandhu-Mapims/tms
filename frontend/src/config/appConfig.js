@@ -31,7 +31,7 @@ export const NAV_ITEMS = [
     label: 'Reports',
     icon: 'bi-graph-up-arrow',
     path: '/reports',
-    roles: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD', 'REQUESTER'],
+    roles: ['ADMIN', 'CHIEF'],
   },
   {
     key: 'hod-tickets',
@@ -66,6 +66,13 @@ export const NAV_ITEMS = [
     label: 'Departments',
     icon: 'bi-building',
     path: '/admin/departments',
+    roles: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD'],
+  },
+  {
+    key: 'sub-departments',
+    label: 'Sub-Departments',
+    icon: 'bi-diagram-2',
+    path: '/admin/sub-departments',
     roles: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD'],
   },
   {

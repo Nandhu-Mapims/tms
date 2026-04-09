@@ -6,7 +6,6 @@ import {
   getDashboardMonthlyTrend,
   getDashboardStatusWise,
   getDashboardSummary,
-  getDashboardTechnicianPerformance,
 } from '../../services/dashboardService';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import LoadingCard from '../../components/common/LoadingCard.jsx';
@@ -33,7 +32,6 @@ function DashboardPage() {
     statusWise: null,
     categoryWise: null,
     monthlyTrend: null,
-    workload: null,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -49,19 +47,17 @@ function DashboardPage() {
   useEffect(() => {
     const loadDashboard = async () => {
       try {
-        const [summary, statusWise, categoryWise, monthlyTrend, workload] = await Promise.all([
+        const [summary, statusWise, categoryWise, monthlyTrend] = await Promise.all([
           getDashboardSummary(),
           getDashboardStatusWise(),
           getDashboardCategoryWise(),
           getDashboardMonthlyTrend(6),
-          getDashboardTechnicianPerformance(),
         ]);
         setState({
           summary: summary?.data ?? null,
           statusWise: statusWise?.data ?? null,
           categoryWise: categoryWise?.data ?? null,
           monthlyTrend: monthlyTrend?.data ?? null,
-          workload: workload?.data ?? null,
         });
         setErrorMessage('');
       } catch (error) {
@@ -78,7 +74,6 @@ function DashboardPage() {
   const statusItems = useMemo(() => takeTop(state.statusWise?.items, 10), [state.statusWise?.items]);
   const categoryItems = useMemo(() => takeTop(state.categoryWise?.items, 6), [state.categoryWise?.items]);
   const monthlyItems = useMemo(() => takeTop(state.monthlyTrend?.items, 6), [state.monthlyTrend?.items]);
-  const workloadItems = useMemo(() => takeTop(state.workload?.items, 6), [state.workload?.items]);
 
   return (
     <div className="d-grid gap-4">
@@ -181,7 +176,7 @@ function DashboardPage() {
           </section>
 
           <section className="row g-3 g-md-4">
-            <div className="col-12 col-xl-6">
+            <div className="col-12">
               <div className="card border-0 shadow-sm h-100">
                 <div className="card-body p-4">
                   <h2 className="h5 mb-1 fw-semibold">Recent Monthly Trend</h2>
@@ -197,38 +192,6 @@ function DashboardPage() {
                     </div>
                   ) : (
                     <div className="text-secondary small">No monthly data available.</div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="col-12 col-xl-6">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body p-4">
-                  <h2 className="h5 mb-1 fw-semibold">Handled By (Workload)</h2>
-                  <p className="small text-secondary mb-3">Assigned vs resolved/closed ticket counts by staff.</p>
-                  {workloadItems.length ? (
-                    <div className="table-responsive">
-                      <table className="table align-middle mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th>Staff</th>
-                            <th>Assigned</th>
-                            <th>Resolved / Closed</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {workloadItems.map((row) => (
-                            <tr key={String(row.technicianId ?? row.name)}>
-                              <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
-                              <td>{row.assignedCount ?? 0}</td>
-                              <td>{row.resolvedCount ?? 0}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-secondary small">No workload data available.</div>
                   )}
                 </div>
               </div>

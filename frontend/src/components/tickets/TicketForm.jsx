@@ -7,7 +7,6 @@ function TicketForm({
   departmentOptions = [],
   categoryOptions = [],
   subcategoryOptions = [],
-  locationOptions = [],
   useAiClassification = false,
   onUseAiClassificationChange = () => {},
   onChange,
@@ -143,7 +142,6 @@ function TicketForm({
               errors={errors}
               categoryOptions={categoryOptions}
               subcategoryOptions={subcategoryOptions}
-              locationOptions={locationOptions}
               onChange={onChange}
               disabled={isSubmitting}
             />

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { validateEmail, validateMinLength, validatePositiveInteger, validateRequired } from '../../utils/validators';
 
 const DURATION_UNIT = {
@@ -13,6 +13,7 @@ const MINUTES_PER_HOUR = 60;
 const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
 
 const getDurationUnitFieldName = (name) => `${name}__unit`;
+const getSelectionModeFieldName = (name) => `${name}__selectionMode`;
 
 const deriveBestUnit = (minutes) => {
   const totalMinutes = Number(minutes);
@@ -80,6 +81,8 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
     fields.forEach((field) => {
       if (field.type === 'multiselect') {
         state[field.name] = Array.isArray(initialValues?.[field.name]) ? initialValues[field.name] : [];
+        const modeField = getSelectionModeFieldName(field.name);
+        state[modeField] = state[field.name].length > 1 ? 'multiple' : (field.defaultSelectionMode || 'single');
       } else {
         state[field.name] = initialValues?.[field.name] ?? (field.type === 'checkbox' ? false : '');
       }
@@ -94,11 +97,27 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
 
   const [formState, setFormState] = useState(defaultState);
   const [errors, setErrors] = useState({});
+  const [openMultiField, setOpenMultiField] = useState('');
+  const multiRef = useRef(null);
 
   useEffect(() => {
     setFormState(defaultState);
     setErrors({});
+    setOpenMultiField('');
   }, [defaultState]);
+
+  const handleClickOutside = useCallback((e) => {
+    if (multiRef.current && !multiRef.current.contains(e.target)) {
+      setOpenMultiField('');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (openMultiField) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [openMultiField, handleClickOutside]);
 
   if (!show) {
     return null;
@@ -111,6 +130,37 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
         ? Array.from(event.target.selectedOptions).map((opt) => opt.value)
         : event.target.value;
     setFormState((prev) => ({ ...prev, [field.name]: value }));
+    setErrors((prev) => ({ ...prev, [field.name]: '' }));
+  };
+
+  const handleSelectionModeChange = (field, nextMode) => {
+    const modeField = getSelectionModeFieldName(field.name);
+    setFormState((prev) => {
+      const current = Array.isArray(prev[field.name]) ? prev[field.name] : [];
+      const normalized = nextMode === 'single' ? current.slice(0, 1) : current;
+      return { ...prev, [modeField]: nextMode, [field.name]: normalized };
+    });
+    setErrors((prev) => ({ ...prev, [field.name]: '' }));
+  };
+
+  const handleMultiCheckboxChange = (field, optionValue, checked) => {
+    const modeField = getSelectionModeFieldName(field.name);
+    setFormState((prev) => {
+      const mode = prev[modeField] || 'single';
+      const current = Array.isArray(prev[field.name]) ? prev[field.name] : [];
+      let next = current;
+      if (mode === 'single') {
+        next = checked ? [optionValue] : [];
+        if (checked) {
+          setOpenMultiField('');
+        }
+      } else if (checked) {
+        next = current.includes(optionValue) ? current : [...current, optionValue];
+      } else {
+        next = current.filter((item) => item !== optionValue);
+      }
+      return { ...prev, [field.name]: next };
+    });
     setErrors((prev) => ({ ...prev, [field.name]: '' }));
   };
 
@@ -201,20 +251,109 @@ function EntityFormModal({ show, title, fields, initialValues, onClose, onSubmit
                             ))}
                           </select>
                         ) : field.type === 'multiselect' ? (
-                          <select
-                            id={field.name}
-                            multiple
-                            className={`form-select ${errors[field.name] ? 'is-invalid' : ''}`}
-                            value={Array.isArray(formState[field.name]) ? formState[field.name] : []}
-                            onChange={(event) => handleChange(field, event)}
-                            required={field.required}
-                          >
-                            {field.options?.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                          (() => {
+                            const selectedValues = Array.isArray(formState[field.name]) ? formState[field.name] : [];
+                            const optionsMap = Object.fromEntries((field.options ?? []).map((o) => [o.value, o.label]));
+                            const mode = formState[getSelectionModeFieldName(field.name)] || 'single';
+                            const isOpen = openMultiField === field.name;
+                            const hasError = errors[field.name];
+
+                            return (
+                              <div>
+                                <style>{`.efm-opt:hover{background:rgba(var(--bs-primary-rgb),.06)!important}`}</style>
+
+                                <div className="d-inline-flex rounded-pill border overflow-hidden mb-2" style={{ fontSize: '0.8rem' }}>
+                                  <button
+                                    type="button"
+                                    className={`btn btn-sm border-0 rounded-0 px-3 py-1 ${mode === 'single' ? 'bg-primary text-white' : 'bg-white text-dark'}`}
+                                    onClick={() => handleSelectionModeChange(field, 'single')}
+                                  >
+                                    Single
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={`btn btn-sm border-0 rounded-0 px-3 py-1 ${mode === 'multiple' ? 'bg-primary text-white' : 'bg-white text-dark'}`}
+                                    onClick={() => handleSelectionModeChange(field, 'multiple')}
+                                  >
+                                    Multiple
+                                  </button>
+                                </div>
+
+                                <div className="position-relative" ref={isOpen ? multiRef : undefined}>
+                                  <div
+                                    className={`form-control d-flex flex-wrap align-items-center gap-1 ${hasError ? 'is-invalid' : ''}`}
+                                    style={{ minHeight: 42, cursor: 'pointer' }}
+                                    onClick={() => setOpenMultiField((prev) => (prev === field.name ? '' : field.name))}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenMultiField((prev) => (prev === field.name ? '' : field.name)); } }}
+                                  >
+                                    {selectedValues.length ? (
+                                      selectedValues.map((val) => (
+                                        <span
+                                          key={val}
+                                          className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 d-inline-flex align-items-center gap-1 px-2 py-1"
+                                        >
+                                          {optionsMap[val] ?? val}
+                                          <button
+                                            type="button"
+                                            className="btn-close btn-close-sm ms-1"
+                                            style={{ fontSize: '0.55rem' }}
+                                            aria-label="Remove"
+                                            onClick={(e) => { e.stopPropagation(); handleMultiCheckboxChange(field, val, false); }}
+                                          />
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-secondary">Click to select department(s)</span>
+                                    )}
+                                    <i className={`bi ${isOpen ? 'bi-chevron-up' : 'bi-chevron-down'} ms-auto text-secondary`} aria-hidden="true" />
+                                  </div>
+
+                                  {isOpen ? (
+                                    <div
+                                      className="border rounded-3 shadow-sm bg-white position-absolute w-100 mt-1 py-2"
+                                      style={{ zIndex: 10, maxHeight: 240, overflowY: 'auto' }}
+                                    >
+                                      {field.options?.map((option) => {
+                                        const checked = selectedValues.includes(option.value);
+                                        return (
+                                          <div
+                                            key={option.value}
+                                            className={`efm-opt d-flex align-items-center gap-2 px-3 py-2 ${checked ? 'bg-primary bg-opacity-10' : ''}`}
+                                            style={{ cursor: 'pointer', transition: 'background .15s' }}
+                                            onClick={() => handleMultiCheckboxChange(field, option.value, !checked)}
+                                            role="option"
+                                            aria-selected={checked}
+                                          >
+                                            <div
+                                              className={`d-flex align-items-center justify-content-center rounded-2 border flex-shrink-0 ${checked ? 'bg-primary border-primary text-white' : 'border-secondary-subtle'}`}
+                                              style={{ width: 20, height: 20, fontSize: 12 }}
+                                            >
+                                              {checked ? <i className="bi bi-check-lg" /> : null}
+                                            </div>
+                                            <span className={`small ${checked ? 'fw-semibold text-primary' : 'text-dark'}`}>{option.label}</span>
+                                          </div>
+                                        );
+                                      })}
+
+                                      {mode === 'multiple' && selectedValues.length > 0 ? (
+                                        <div className="text-end mt-1 pt-2 px-3 border-top">
+                                          <button
+                                            type="button"
+                                            className="btn btn-sm btn-primary"
+                                            onClick={() => setOpenMultiField('')}
+                                          >
+                                            Done
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })()
                         ) : field.type === 'textarea' ? (
                           <textarea
                             id={field.name}

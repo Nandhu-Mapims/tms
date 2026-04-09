@@ -11,8 +11,8 @@ const ticketSchema = new mongoose.Schema(
     status: { type: String, enum: Object.values(TicketStatus), default: TicketStatus.NEW },
     isOverdue: { type: Boolean, default: false },
 
-    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
-    /** Department of the user who raised the ticket (requester department). */
+    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
+    subDepartmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubDepartment', default: null },
     requesterDepartmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
     categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     subcategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subcategory', required: true },

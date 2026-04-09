@@ -80,6 +80,7 @@ const registerUser = async (payload) => {
     role,
     departmentId: normalizedDepartmentId,
     departmentIds: normalizedDepartmentIds,
+    subDepartmentId: payload.subDepartmentId || null,
   });
 
   return sanitizeUser(user);

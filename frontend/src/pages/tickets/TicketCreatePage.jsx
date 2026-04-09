@@ -5,19 +5,17 @@ import TicketForm from '../../components/tickets/TicketForm.jsx';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { createTicketRequest } from '../../services/ticketService';
-import { getCategories, getDepartments, getLocations, getSubcategories } from '../../services/masterDataService';
+import { getCategories, getDepartments, getSubcategories } from '../../services/masterDataService';
 import { getErrorMessage } from '../../utils/getErrorMessage';
 import { validateFiles, validateRequired } from '../../utils/validators';
 
 const initialFormState = {
   prompt: '',
   departmentId: '',
-  title: '',
   categoryId: '',
   subcategoryId: '',
   priority: '',
-  locationId: '',
-  issueType: '',
+  locationText: '',
   attachments: [],
 };
 
@@ -44,9 +42,6 @@ const collectValidationErrors = (formState, useAiClassification) => {
     nextErrors.categoryId = validateRequired(formState.categoryId, 'Category');
     nextErrors.subcategoryId = validateRequired(formState.subcategoryId, 'Subcategory');
     nextErrors.priority = validateRequired(formState.priority, 'Priority');
-    if (formState.issueType === 'HARDWARE') {
-      nextErrors.locationId = validateRequired(formState.locationId, 'Location');
-    }
   }
 
   Object.keys(nextErrors).forEach((key) => {
@@ -70,7 +65,6 @@ function TicketCreatePage() {
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [categoryOptions, setCategoryOptions] = useState([]);
   const [subcategoryOptionsAll, setSubcategoryOptionsAll] = useState([]);
-  const [locationOptions, setLocationOptions] = useState([]);
   const [pageError, setPageError] = useState('');
 
   useEffect(() => {
@@ -78,17 +72,15 @@ function TicketCreatePage() {
     const loadReferenceData = async () => {
       setIsReferenceDataLoading(true);
       try {
-        const [deptRes, catRes, subRes, locRes] = await Promise.all([
+        const [deptRes, catRes, subRes] = await Promise.all([
           getDepartments({ isActive: true }),
           getCategories({ isActive: true }),
           getSubcategories({ isActive: true }),
-          getLocations({ isActive: true }),
         ]);
         if (isCancelled) return;
         setDepartmentOptions(normalizeList(deptRes));
         setCategoryOptions(normalizeList(catRes));
         setSubcategoryOptionsAll(normalizeList(subRes));
-        setLocationOptions(normalizeList(locRes));
       } catch (error) {
         if (isCancelled) return;
         const message = getErrorMessage(error, 'Unable to load form data.');
@@ -104,6 +96,16 @@ function TicketCreatePage() {
     };
   }, [toast]);
 
+  const categoryOptionsFiltered = useMemo(
+    () => {
+      if (!formState.departmentId) return categoryOptions;
+      return categoryOptions.filter(
+        (cat) => !cat.departmentId || String(cat.departmentId) === String(formState.departmentId)
+      );
+    },
+    [categoryOptions, formState.departmentId],
+  );
+
   const subcategoryOptionsFiltered = useMemo(
     () =>
       subcategoryOptionsAll.filter((item) => String(item?.categoryId ?? '') === String(formState.categoryId ?? '')),
@@ -113,6 +115,10 @@ function TicketCreatePage() {
   const handleChange = useCallback((name, value) => {
     setFormState((prev) => {
       const next = { ...prev, [name]: value };
+      if (name === 'departmentId') {
+        next.categoryId = '';
+        next.subcategoryId = '';
+      }
       if (name === 'categoryId') {
         next.subcategoryId = '';
       }
@@ -126,12 +132,10 @@ function TicketCreatePage() {
     if (checked) {
       setFormState((prev) => ({
         ...prev,
-        title: '',
         categoryId: '',
         subcategoryId: '',
         priority: '',
-        locationId: '',
-        issueType: '',
+        locationText: '',
       }));
     }
     setErrors({});
@@ -163,21 +167,15 @@ function TicketCreatePage() {
         attachments: formState.attachments,
       };
 
-      const trimmedTitle = String(formState.title ?? '').trim();
-      if (trimmedTitle) {
-        payload.title = trimmedTitle;
+      const trimmedLocation = String(formState.locationText ?? '').trim();
+      if (trimmedLocation) {
+        payload.locationText = trimmedLocation;
       }
 
       if (!useAiClassification) {
         payload.categoryId = formState.categoryId;
         payload.subcategoryId = formState.subcategoryId;
         payload.priority = formState.priority;
-        if (formState.issueType) {
-          payload.issueType = formState.issueType;
-        }
-        if (formState.locationId) {
-          payload.locationId = formState.locationId;
-        }
       }
 
       const response = await createTicketRequest(payload);
@@ -221,9 +219,8 @@ function TicketCreatePage() {
         formState={formState}
         errors={errors}
         departmentOptions={departmentOptions}
-        categoryOptions={categoryOptions}
+        categoryOptions={categoryOptionsFiltered}
         subcategoryOptions={subcategoryOptionsFiltered}
-        locationOptions={locationOptions}
         useAiClassification={useAiClassification}
         onUseAiClassificationChange={handleUseAiClassificationChange}
         onChange={handleChange}

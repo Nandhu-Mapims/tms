@@ -18,6 +18,7 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: Object.values(Role), required: true },
     departmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', default: null },
     departmentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Department' }],
+    subDepartmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubDepartment', default: null },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
