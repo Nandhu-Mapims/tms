@@ -186,28 +186,53 @@ function ChiefDashboard({ user }) {
             (including resolved awaiting requester confirmation).
           </p>
           {completionRows.length ? (
-            <div className="table-responsive">
-              <table className="table align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Department</th>
-                    <th className="text-end">Total</th>
-                    <th className="text-end">Completed</th>
-                    <th className="text-end">Pending</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {completionRows.map((row) => (
-                    <tr key={String(row.departmentId ?? row.name)}>
-                      <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
-                      <td className="text-end">{row.total ?? 0}</td>
-                      <td className="text-end text-success">{row.completed ?? 0}</td>
-                      <td className="text-end text-warning">{row.pending ?? 0}</td>
+            <>
+              <div className="d-none d-md-block table-responsive">
+                <table className="table align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Department</th>
+                      <th className="text-end">Total</th>
+                      <th className="text-end">Completed</th>
+                      <th className="text-end">Pending</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {completionRows.map((row) => (
+                      <tr key={String(row.departmentId ?? row.name)}>
+                        <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
+                        <td className="text-end">{row.total ?? 0}</td>
+                        <td className="text-end text-success">{row.completed ?? 0}</td>
+                        <td className="text-end text-warning">{row.pending ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="d-md-none vstack gap-2">
+                {completionRows.map((row) => (
+                  <div key={String(row.departmentId ?? row.name)} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="fw-semibold text-dark mb-2">{row.name ?? 'Unknown'}</div>
+                      <div className="row g-2 small text-center">
+                        <div className="col-4">
+                          <div className="entity-mobile-field-label">Total</div>
+                          <div className="fw-medium">{row.total ?? 0}</div>
+                        </div>
+                        <div className="col-4">
+                          <div className="entity-mobile-field-label">Done</div>
+                          <div className="text-success fw-medium">{row.completed ?? 0}</div>
+                        </div>
+                        <div className="col-4">
+                          <div className="entity-mobile-field-label">Pending</div>
+                          <div className="text-warning fw-medium">{row.pending ?? 0}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-secondary small">No department data available.</div>
           )}
@@ -221,42 +246,72 @@ function ChiefDashboard({ user }) {
             Detailed split per department so you can review workload and completion department by department.
           </p>
           {departmentKpiRows.length ? (
-            <div className="table-responsive">
-              <table className="table align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Department</th>
-                    <th className="text-end">Total</th>
-                    <th className="text-end">Open</th>
-                    <th className="text-end">Assigned</th>
-                    <th className="text-end">In Progress</th>
-                    <th className="text-end">Resolved</th>
-                    <th className="text-end">Closed</th>
-                    <th className="text-end">Cancelled</th>
-                    <th className="text-end">Overdue</th>
-                    <th className="text-end">Escalated</th>
-                    <th className="text-end">Completion %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {departmentKpiRows.map((row) => (
-                    <tr key={String(row.departmentId ?? row.name)}>
-                      <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
-                      <td className="text-end">{row.total ?? 0}</td>
-                      <td className="text-end">{row.open ?? 0}</td>
-                      <td className="text-end">{row.assigned ?? 0}</td>
-                      <td className="text-end">{row.inProgress ?? 0}</td>
-                      <td className="text-end">{row.resolved ?? 0}</td>
-                      <td className="text-end">{row.closed ?? 0}</td>
-                      <td className="text-end">{row.cancelled ?? 0}</td>
-                      <td className="text-end">{row.overdue ?? 0}</td>
-                      <td className="text-end">{row.escalated ?? 0}</td>
-                      <td className="text-end fw-semibold">{row.completionRate ?? 0}%</td>
+            <>
+              <div className="d-none d-md-block table-responsive">
+                <table className="table align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Department</th>
+                      <th className="text-end">Total</th>
+                      <th className="text-end">Open</th>
+                      <th className="text-end">Assigned</th>
+                      <th className="text-end">In Progress</th>
+                      <th className="text-end">Resolved</th>
+                      <th className="text-end">Closed</th>
+                      <th className="text-end">Cancelled</th>
+                      <th className="text-end">Overdue</th>
+                      <th className="text-end">Escalated</th>
+                      <th className="text-end">Completion %</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {departmentKpiRows.map((row) => (
+                      <tr key={String(row.departmentId ?? row.name)}>
+                        <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
+                        <td className="text-end">{row.total ?? 0}</td>
+                        <td className="text-end">{row.open ?? 0}</td>
+                        <td className="text-end">{row.assigned ?? 0}</td>
+                        <td className="text-end">{row.inProgress ?? 0}</td>
+                        <td className="text-end">{row.resolved ?? 0}</td>
+                        <td className="text-end">{row.closed ?? 0}</td>
+                        <td className="text-end">{row.cancelled ?? 0}</td>
+                        <td className="text-end">{row.overdue ?? 0}</td>
+                        <td className="text-end">{row.escalated ?? 0}</td>
+                        <td className="text-end fw-semibold">{row.completionRate ?? 0}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="d-md-none vstack gap-3">
+                {departmentKpiRows.map((row) => (
+                  <div key={String(row.departmentId ?? row.name)} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="fw-semibold text-dark mb-3">{row.name ?? 'Unknown'}</div>
+                      <div className="vstack gap-2 small entity-mobile-fields">
+                        {[
+                          ['Total', row.total ?? 0],
+                          ['Open', row.open ?? 0],
+                          ['Assigned', row.assigned ?? 0],
+                          ['In Progress', row.inProgress ?? 0],
+                          ['Resolved', row.resolved ?? 0],
+                          ['Closed', row.closed ?? 0],
+                          ['Cancelled', row.cancelled ?? 0],
+                          ['Overdue', row.overdue ?? 0],
+                          ['Escalated', row.escalated ?? 0],
+                          ['Completion %', `${row.completionRate ?? 0}%`],
+                        ].map(([label, value]) => (
+                          <div key={label} className="d-flex justify-content-between gap-3">
+                            <span className="entity-mobile-field-label mb-0">{label}</span>
+                            <span className="text-dark fw-medium text-end">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-secondary small">No department KPI data available.</div>
           )}
@@ -390,26 +445,47 @@ function ChiefDashboard({ user }) {
             <span className="badge text-bg-light">{workloadItems.length}</span>
           </div>
           {workloadItems.length ? (
-            <div className="table-responsive">
-              <table className="table align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Staff</th>
-                    <th>Assigned</th>
-                    <th>Resolved / Closed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workloadItems.map((row) => (
-                    <tr key={String(row.technicianId ?? row.name)}>
-                      <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
-                      <td>{row.assignedCount ?? 0}</td>
-                      <td>{row.resolvedCount ?? 0}</td>
+            <>
+              <div className="d-none d-md-block table-responsive">
+                <table className="table align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Staff</th>
+                      <th>Assigned</th>
+                      <th>Resolved / Closed</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {workloadItems.map((row) => (
+                      <tr key={String(row.technicianId ?? row.name)}>
+                        <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
+                        <td>{row.assignedCount ?? 0}</td>
+                        <td>{row.resolvedCount ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="d-md-none vstack gap-2">
+                {workloadItems.map((row) => (
+                  <div key={String(row.technicianId ?? row.name)} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="fw-semibold text-dark mb-2">{row.name ?? 'Unknown'}</div>
+                      <div className="row g-2 small">
+                        <div className="col-6">
+                          <div className="entity-mobile-field-label">Assigned</div>
+                          <div>{row.assignedCount ?? 0}</div>
+                        </div>
+                        <div className="col-6">
+                          <div className="entity-mobile-field-label">Resolved / Closed</div>
+                          <div>{row.resolvedCount ?? 0}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-secondary small">No workload data available.</div>
           )}

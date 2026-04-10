@@ -57,6 +57,14 @@ function EntityManagementPage({
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
 
+  const renderCellValue = (column, item) => {
+    if (column.render) {
+      return column.render(item);
+    }
+    const value = item[column.key];
+    return value === undefined || value === null || value === '' ? 'Not available' : value;
+  };
+
   const actions = useMemo(() => {
     if (!canManage) {
       return null;
@@ -197,76 +205,145 @@ function EntityManagementPage({
       {isLoading ? (
         <LoadingCard message={`Loading ${title.toLowerCase()}...`} />
       ) : paginatedItems.length ? (
-        <div className="card border-0 shadow-sm">
-          <div className="table-responsive">
-            <table className="table align-middle mb-0 admin-table">
-              <thead className="table-light">
-                <tr>
-                  {columns.map((column) => (
-                    <th key={column.key}>{column.label}</th>
-                  ))}
-                  <th>Status</th>
-                  {canManage ? <th className="text-end">Actions</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedItems.map((item) => (
-                  <tr key={item.id}>
+        <div className="card border-0 shadow-sm overflow-hidden">
+          <div className="d-none d-md-block">
+            <div className="table-responsive">
+              <table className="table align-middle mb-0 admin-table">
+                <thead className="table-light">
+                  <tr>
                     {columns.map((column) => (
-                      <td key={column.key}>
-                        {column.render ? column.render(item) : item[column.key] ?? 'Not available'}
-                      </td>
+                      <th key={column.key}>{column.label}</th>
                     ))}
-                    <td>
-                      <span className={`badge ${item.isActive ? 'text-bg-success' : 'text-bg-secondary'}`}>
-                        {item.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    {canManage ? (
-                      <td className="text-end">
-                        <div className="d-inline-flex flex-wrap justify-content-end gap-2">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => setModalState({ open: true, mode: 'edit', item })}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-warning"
-                            onClick={() => handleToggleStatus(item)}
-                          >
-                            {item.isActive ? 'Disable' : 'Enable'}
-                          </button>
-                          {showDeleteAction ? (
+                    <th>Status</th>
+                    {canManage ? <th className="text-end">Actions</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedItems.map((item) => (
+                    <tr key={item.id}>
+                      {columns.map((column) => (
+                        <td key={column.key}>{renderCellValue(column, item)}</td>
+                      ))}
+                      <td>
+                        <span className={`badge ${item.isActive ? 'text-bg-success' : 'text-bg-secondary'}`}>
+                          {item.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      {canManage ? (
+                        <td className="text-end">
+                          <div className="d-inline-flex flex-wrap justify-content-end gap-2">
                             <button
                               type="button"
-                              className="btn btn-sm btn-outline-danger"
-                              onClick={() => handleDelete(item)}
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => setModalState({ open: true, mode: 'edit', item })}
                             >
-                              Delete
+                              Edit
                             </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-warning"
+                              onClick={() => handleToggleStatus(item)}
+                            >
+                              {item.isActive ? 'Disable' : 'Enable'}
+                            </button>
+                            {showDeleteAction ? (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => handleDelete(item)}
+                              >
+                                Delete
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="card-footer bg-white d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
-            <div className="small text-secondary">
+          <div className="d-md-none">
+            <div className="vstack gap-3 p-3">
+              {paginatedItems.map((item) => {
+                const [primaryColumn, ...detailColumns] = columns;
+                return (
+                  <div key={item.id} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="d-flex justify-content-between align-items-start gap-2 mb-3">
+                        <div className="fw-semibold text-dark text-break lh-sm flex-grow-1 min-w-0">
+                          {primaryColumn ? renderCellValue(primaryColumn, item) : item.name || item.code || item.id}
+                        </div>
+                        <span
+                          className={`badge flex-shrink-0 align-self-start ${item.isActive ? 'text-bg-success' : 'text-bg-secondary'}`}
+                        >
+                          {item.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                      <div className="vstack gap-2 small entity-mobile-fields">
+                        {detailColumns.map((column) => (
+                          <div key={column.key}>
+                            <div className="entity-mobile-field-label">{column.label}</div>
+                            <div className="text-break text-dark">{renderCellValue(column, item)}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {canManage ? (
+                        <div className="d-grid gap-2 mt-3 pt-3 border-top">
+                          <div className="row g-2">
+                            <div className="col-6">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary w-100"
+                                onClick={() => setModalState({ open: true, mode: 'edit', item })}
+                              >
+                                Edit
+                              </button>
+                            </div>
+                            <div className="col-6">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-warning w-100"
+                                onClick={() => handleToggleStatus(item)}
+                              >
+                                {item.isActive ? 'Disable' : 'Enable'}
+                              </button>
+                            </div>
+                            {showDeleteAction ? (
+                              <div className="col-12">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger w-100"
+                                  onClick={() => handleDelete(item)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="card-footer bg-white d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center gap-3 px-3 py-3">
+            <div className="small text-secondary text-center text-md-start">
               Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, filteredItems.length)} of {filteredItems.length} records
             </div>
             <div className="btn-group">
               <button type="button" className="btn btn-outline-secondary" disabled={page <= 1} onClick={() => setPage((prev) => prev - 1)}>
-                Previous
+                <span className="d-sm-none">Prev</span>
+                <span className="d-none d-sm-inline">Previous</span>
               </button>
-              <button type="button" className="btn btn-outline-secondary disabled">
-                Page {page} of {totalPages}
+              <button type="button" className="btn btn-outline-secondary disabled px-2 px-sm-3">
+                <span className="d-sm-none">{page}/{totalPages}</span>
+                <span className="d-none d-sm-inline">Page {page} of {totalPages}</span>
               </button>
               <button type="button" className="btn btn-outline-secondary" disabled={page >= totalPages} onClick={() => setPage((prev) => prev + 1)}>
                 Next

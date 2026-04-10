@@ -185,26 +185,47 @@ function HodDashboard({ user }) {
             <span className="badge text-bg-light">{workloadItems.length}</span>
           </div>
           {workloadItems.length ? (
-            <div className="table-responsive">
-              <table className="table align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Staff</th>
-                    <th>Assigned</th>
-                    <th>Resolved / Closed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workloadItems.map((row) => (
-                    <tr key={String(row.technicianId ?? row.name)}>
-                      <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
-                      <td>{row.assignedCount ?? 0}</td>
-                      <td>{row.resolvedCount ?? 0}</td>
+            <>
+              <div className="d-none d-md-block table-responsive">
+                <table className="table align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Staff</th>
+                      <th>Assigned</th>
+                      <th>Resolved / Closed</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {workloadItems.map((row) => (
+                      <tr key={String(row.technicianId ?? row.name)}>
+                        <td className="fw-semibold text-dark">{row.name ?? 'Unknown'}</td>
+                        <td>{row.assignedCount ?? 0}</td>
+                        <td>{row.resolvedCount ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="d-md-none vstack gap-2">
+                {workloadItems.map((row) => (
+                  <div key={String(row.technicianId ?? row.name)} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="fw-semibold text-dark mb-2">{row.name ?? 'Unknown'}</div>
+                      <div className="row g-2 small">
+                        <div className="col-6">
+                          <div className="entity-mobile-field-label">Assigned</div>
+                          <div>{row.assignedCount ?? 0}</div>
+                        </div>
+                        <div className="col-6">
+                          <div className="entity-mobile-field-label">Resolved / Closed</div>
+                          <div>{row.resolvedCount ?? 0}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-secondary small">No workload data available.</div>
           )}

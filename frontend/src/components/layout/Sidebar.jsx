@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { APP_NAME, APP_SUBTITLE, NAV_ITEMS } from '../../config/appConfig';
 import { useAuth } from '../../hooks/useAuth';
 
-function Sidebar() {
+function Sidebar({ mobileOpen = false, onClose }) {
   const { user } = useAuth();
   const location = useLocation();
 
@@ -22,14 +22,28 @@ function Sidebar() {
   };
 
   return (
-    <aside className="app-sidebar d-flex flex-column p-3 border-end bg-white">
+    <aside
+      className={`app-sidebar d-flex flex-column p-3 border-end bg-white ${mobileOpen ? 'app-sidebar--open' : ''}`}
+    >
+      <div className="d-flex align-items-center justify-content-between gap-2 mb-3 pb-2 border-bottom flex-shrink-0 d-lg-none">
+        <span className="small text-uppercase text-secondary fw-semibold">Menu</span>
+        <button
+          type="button"
+          className="btn btn-outline-secondary btn-sm"
+          onClick={onClose}
+          aria-label="Close navigation menu"
+        >
+          <i className="bi bi-x-lg" aria-hidden="true" />
+        </button>
+      </div>
+
       <div className="d-flex align-items-center gap-3 mb-4 pb-3 border-bottom flex-shrink-0">
         <div className="sidebar-logo shadow-sm">
           <img src="/hospital-mark.svg" alt="Hospital logo" width="28" height="28" />
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className="h6 mb-0 fw-bold text-dark">{APP_NAME}</h1>
-          <p className="small text-secondary mb-0">{APP_SUBTITLE}</p>
+          <p className="small text-secondary mb-0 text-truncate">{APP_SUBTITLE}</p>
         </div>
       </div>
 
@@ -42,6 +56,7 @@ function Sidebar() {
             className={() =>
               `nav-link app-nav-link d-flex align-items-center justify-content-between ${isNavItemActive(item) ? 'active' : ''}`
             }
+            onClick={() => onClose?.()}
           >
             <span className="d-flex align-items-center gap-2">
               <i className={`bi ${item.icon}`}></i>

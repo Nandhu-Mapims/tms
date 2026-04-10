@@ -108,7 +108,7 @@ body {
 .top-navbar {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 1020;
   background: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: blur(10px);
 }
@@ -247,6 +247,21 @@ body {
   vertical-align: middle;
 }
 
+/* Stacked list for admin entity tables on small screens (see EntityManagementPage) */
+.entity-mobile-card {
+  border-radius: var(--radius-md);
+  border-color: #e3edf6 !important;
+}
+
+.entity-mobile-field-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.15rem;
+}
+
 .app-nav-scroll {
   overflow: auto;
 }
@@ -261,38 +276,48 @@ body {
   width: 5.5rem;
 }
 
+/* Tablet & mobile: full-width content; sidebar becomes off-canvas drawer */
 @media (max-width: 991.98px) {
-  .app-shell {
-    display: block;
-  }
-
-  .app-sidebar {
-    min-height: auto;
-    position: relative;
-    width: auto;
-    left: auto;
-    top: auto;
-    bottom: auto;
-    overflow: visible;
-    border-bottom: 1px solid var(--shell-border);
-  }
-
   .app-content-wrapper {
     margin-left: 0;
   }
 
-  .app-nav-scroll {
-    flex-direction: row !important;
-    flex-wrap: nowrap;
-    padding-bottom: 0.25rem;
+  .app-sidebar {
+    width: min(18rem, 88vw);
+    max-width: var(--sidebar-width);
+    z-index: 1035;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    box-shadow: none;
+    border-bottom: none;
   }
 
-  .app-nav-link {
-    min-width: max-content;
+  .app-sidebar.app-sidebar--open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-md);
+  }
+
+  .app-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1030;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: rgba(18, 30, 42, 0.45);
+    backdrop-filter: blur(2px);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .app-content {
-    padding: 1.25rem !important;
+    padding: 1rem !important;
+  }
+}
+
+@media (min-width: 992px) {
+  .app-sidebar {
+    transform: none !important;
   }
 }
 
@@ -309,9 +334,21 @@ body {
     left: 0;
     right: 0;
     max-width: none;
+    padding-left: env(safe-area-inset-left, 0);
+    padding-right: env(safe-area-inset-right, 0);
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
 
   .toast-stack .toast {
     width: auto;
+  }
+
+  .app-shell {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .app-sidebar {
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0));
   }
 }

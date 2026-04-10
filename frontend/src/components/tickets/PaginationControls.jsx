@@ -13,17 +13,23 @@ function PaginationControls({ meta, onPageChange }) {
 
   return (
     <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mt-4">
-      <div className="text-secondary small">
-        Page {meta.page} of {meta.totalPages} | {meta.total} records total | {meta.limit} per page
+      <div className="text-secondary small text-center text-lg-start">
+        <span className="d-lg-none">
+          Pg {meta.page}/{meta.totalPages} · {meta.total} total · {meta.limit}/pg
+        </span>
+        <span className="d-none d-lg-inline">
+          Page {meta.page} of {meta.totalPages} | {meta.total} records total | {meta.limit} per page
+        </span>
       </div>
-      <div className="d-flex flex-wrap gap-2">
+      <div className="d-flex flex-wrap gap-2 justify-content-center justify-content-lg-end">
         <button
           type="button"
           className="btn btn-outline-secondary"
           disabled={meta.page <= 1}
           onClick={() => onPageChange(meta.page - 1)}
         >
-          Previous
+          <span className="d-sm-none">Prev</span>
+          <span className="d-none d-sm-inline">Previous</span>
         </button>
         {pages.map((page) => (
           <button

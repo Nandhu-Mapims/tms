@@ -161,74 +161,142 @@ function TransferRequestsPage() {
       {isLoading ? (
         <LoadingCard message="Loading transfer requests..." />
       ) : items.length ? (
-        <div className="card border-0 shadow-sm">
-          <div className="table-responsive">
-            <table className="table align-middle mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>Ticket</th>
-                  <th>From / To</th>
-                  <th>Status</th>
-                  <th>Requested</th>
-                  <th className="text-end">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((req) => {
-                  const from = req?.requester?.fullName || 'Unknown';
-                  const to = req?.targetAgent?.fullName || 'Unknown';
-                  const fromToLabel = isReceivedTab ? `From: ${from}` : `To: ${to}`;
+        <div className="card border-0 shadow-sm overflow-hidden">
+          <div className="d-none d-md-block">
+            <div className="table-responsive">
+              <table className="table align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Ticket</th>
+                    <th>From / To</th>
+                    <th>Status</th>
+                    <th>Requested</th>
+                    <th className="text-end">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((req) => {
+                    const from = req?.requester?.fullName || 'Unknown';
+                    const to = req?.targetAgent?.fullName || 'Unknown';
+                    const fromToLabel = isReceivedTab ? `From: ${from}` : `To: ${to}`;
 
-                  const canDecide = isReceivedTab && req?.status === 'PENDING' && !isActionLoading;
+                    const canDecide = isReceivedTab && req?.status === 'PENDING' && !isActionLoading;
 
-                  return (
-                    <tr key={req.id}>
-                      <td>
-                        <div className="fw-semibold text-dark">{req.ticketNumber}</div>
-                        <div className="text-secondary small">{req.ticketTitle || 'Not available'}</div>
-                      </td>
-                      <td>{fromToLabel}</td>
-                      <td>
-                        <span className={`badge rounded-pill ${getRequestStatusBadgeClass(req.status)}`}>
+                    return (
+                      <tr key={req.id}>
+                        <td>
+                          <div className="fw-semibold text-dark">{req.ticketNumber}</div>
+                          <div className="text-secondary small">{req.ticketTitle || 'Not available'}</div>
+                        </td>
+                        <td>{fromToLabel}</td>
+                        <td>
+                          <span className={`badge rounded-pill ${getRequestStatusBadgeClass(req.status)}`}>
+                            {REQUEST_STATUS_LABELS[req.status] || req.status || 'Unknown'}
+                          </span>
+                        </td>
+                        <td>{req.createdAt ? formatDateTime(req.createdAt) : 'Not available'}</td>
+                        <td className="text-end">
+                          <div className="d-flex justify-content-end gap-2 flex-wrap">
+                            <Link to={`/tickets/${req.ticketNumber}`} className="btn btn-sm btn-outline-primary">
+                              View
+                            </Link>
+                            {isReceivedTab ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-success"
+                                  disabled={!canDecide}
+                                  onClick={() => executeDecision({ requestId: req.id, decision: 'approve' })}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger"
+                                  disabled={!canDecide}
+                                  onClick={() => executeDecision({ requestId: req.id, decision: 'reject' })}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="d-md-none">
+            <div className="vstack gap-3 p-3">
+              {items.map((req) => {
+                const from = req?.requester?.fullName || 'Unknown';
+                const to = req?.targetAgent?.fullName || 'Unknown';
+                const fromToLabel = isReceivedTab ? `From: ${from}` : `To: ${to}`;
+                const canDecide = isReceivedTab && req?.status === 'PENDING' && !isActionLoading;
+
+                return (
+                  <div key={req.id} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <div className="min-w-0">
+                          <div className="fw-semibold text-dark">{req.ticketNumber}</div>
+                          <div className="text-secondary small text-break">{req.ticketTitle || 'Not available'}</div>
+                        </div>
+                        <span className={`badge rounded-pill flex-shrink-0 ${getRequestStatusBadgeClass(req.status)}`}>
                           {REQUEST_STATUS_LABELS[req.status] || req.status || 'Unknown'}
                         </span>
-                      </td>
-                      <td>{req.createdAt ? formatDateTime(req.createdAt) : 'Not available'}</td>
-                      <td className="text-end">
-                        <div className="d-flex justify-content-end gap-2">
-                          <Link to={`/tickets/${req.ticketNumber}`} className="btn btn-sm btn-outline-primary">
-                            View
-                          </Link>
-                          {isReceivedTab ? (
-                            <>
+                      </div>
+                      <div className="vstack gap-2 small entity-mobile-fields">
+                        <div>
+                          <div className="entity-mobile-field-label">{isReceivedTab ? 'From' : 'To'}</div>
+                          <div className="text-break text-dark">{isReceivedTab ? from : to}</div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Requested</div>
+                          <div className="text-dark">{req.createdAt ? formatDateTime(req.createdAt) : 'Not available'}</div>
+                        </div>
+                      </div>
+                      <div className="d-grid gap-2 mt-3 pt-3 border-top">
+                        <Link to={`/tickets/${req.ticketNumber}`} className="btn btn-sm btn-outline-primary">
+                          View ticket
+                        </Link>
+                        {isReceivedTab ? (
+                          <div className="row g-2">
+                            <div className="col-6">
                               <button
                                 type="button"
-                                className="btn btn-sm btn-success"
+                                className="btn btn-sm btn-success w-100"
                                 disabled={!canDecide}
                                 onClick={() => executeDecision({ requestId: req.id, decision: 'approve' })}
                               >
                                 Approve
                               </button>
+                            </div>
+                            <div className="col-6">
                               <button
                                 type="button"
-                                className="btn btn-sm btn-outline-danger"
+                                className="btn btn-sm btn-outline-danger w-100"
                                 disabled={!canDecide}
                                 onClick={() => executeDecision({ requestId: req.id, decision: 'reject' })}
                               >
                                 Reject
                               </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="px-4 pb-4">
+          <div className="px-3 px-md-4 pb-4">
             <PaginationControls meta={meta} onPageChange={(next) => loadRequests(next)} />
           </div>
         </div>

@@ -358,26 +358,41 @@ function ReportsPage() {
           {loadingMonthly ? (
             <LoadingCard message="Loading monthly breakdown..." />
           ) : monthlyRows.length ? (
-            <div className="table-responsive">
-              <table className="table table-sm align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Month</th>
-                    <th className="text-end">Created</th>
-                    <th className="text-end">Closed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthlyRows.map((row) => (
-                    <tr key={row.month}>
-                      <td>{row.month}</td>
-                      <td className="text-end">{row.created}</td>
-                      <td className="text-end">{row.closed}</td>
+            <>
+              <div className="d-none d-md-block table-responsive">
+                <table className="table table-sm align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Month</th>
+                      <th className="text-end">Created</th>
+                      <th className="text-end">Closed</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {monthlyRows.map((row) => (
+                      <tr key={row.month}>
+                        <td>{row.month}</td>
+                        <td className="text-end">{row.created}</td>
+                        <td className="text-end">{row.closed}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="d-md-none vstack gap-2">
+                {monthlyRows.map((row) => (
+                  <div key={row.month} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3 d-flex justify-content-between align-items-center gap-3 flex-wrap">
+                      <span className="fw-semibold text-dark">{row.month}</span>
+                      <div className="small text-secondary ms-auto">
+                        <span className="text-dark fw-medium">{row.created}</span> created ·{' '}
+                        <span className="text-dark fw-medium">{row.closed}</span> closed
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-secondary small">No monthly data for the current filters.</div>
           )}
@@ -415,73 +430,148 @@ function ReportsPage() {
         <LoadingCard message="Loading report..." />
       ) : rows.length ? (
         <>
-          <div className="card border-0 shadow-sm">
-            <div className="table-responsive">
-              <table className="table align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Ticket</th>
-                    <th>Issue</th>
-                    <th>Handling dept</th>
-                    <th>Requester dept</th>
-                    <th>Assigned to</th>
-                    <th>Raised by</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>Resolved</th>
-                    <th>Closed</th>
-                    <th>Closure</th>
-                    <th className="text-end">View</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td className="fw-semibold text-nowrap">{row.ticketNumber}</td>
-                      <td style={{ maxWidth: 280 }}>
-                        <div className="fw-semibold text-dark text-truncate">{row.title}</div>
-                        {row.description ? <div className="small text-secondary text-truncate">{row.description}</div> : null}
-                      </td>
-                      <td>{row.department?.name ?? '—'}</td>
-                      <td>{row.requesterDepartment?.name ?? row.department?.name ?? '—'}</td>
-                      <td>
-                        {row.assignedTo?.fullName ? (
-                          <span>
-                            {row.assignedTo.fullName}
-                            {row.assignedTo?.empId ? <span className="text-secondary small ms-1">({row.assignedTo.empId})</span> : null}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td>
-                        {row.requester?.fullName ? (
-                          <span>
-                            {row.requester.fullName}
-                            {row.requester?.empId ? <span className="text-secondary small ms-1">({row.requester.empId})</span> : null}
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td>
-                        <span className={`badge ${getStatusBadgeClass(row.status)}`}>{String(row.status ?? '').replaceAll('_', ' ')}</span>
-                      </td>
-                      <td>
-                        <span className={`badge rounded-pill ${getPriorityBadgeClass(row.priority)}`}>{row.priority}</span>
-                      </td>
-                      <td className="small text-nowrap">{formatDateTime(row.resolvedAt)}</td>
-                      <td className="small text-nowrap">{formatDateTime(row.closedAt)}</td>
-                      <td className="small">{row.closureSummary ?? '—'}</td>
-                      <td className="text-end">
-                        <Link to={`/tickets/${row.ticketNumber}`} className="btn btn-sm btn-outline-primary">
-                          Open
-                        </Link>
-                      </td>
+          <div className="card border-0 shadow-sm overflow-hidden">
+            <div className="d-none d-md-block">
+              <div className="table-responsive">
+                <table className="table align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Ticket</th>
+                      <th>Issue</th>
+                      <th>Handling dept</th>
+                      <th>Requester dept</th>
+                      <th>Assigned to</th>
+                      <th>Raised by</th>
+                      <th>Status</th>
+                      <th>Priority</th>
+                      <th>Resolved</th>
+                      <th>Closed</th>
+                      <th>Closure</th>
+                      <th className="text-end">View</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.id}>
+                        <td className="fw-semibold text-nowrap">{row.ticketNumber}</td>
+                        <td style={{ maxWidth: 280 }}>
+                          <div className="fw-semibold text-dark text-truncate">{row.title}</div>
+                          {row.description ? <div className="small text-secondary text-truncate">{row.description}</div> : null}
+                        </td>
+                        <td>{row.department?.name ?? '—'}</td>
+                        <td>{row.requesterDepartment?.name ?? row.department?.name ?? '—'}</td>
+                        <td>
+                          {row.assignedTo?.fullName ? (
+                            <span>
+                              {row.assignedTo.fullName}
+                              {row.assignedTo?.empId ? <span className="text-secondary small ms-1">({row.assignedTo.empId})</span> : null}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td>
+                          {row.requester?.fullName ? (
+                            <span>
+                              {row.requester.fullName}
+                              {row.requester?.empId ? <span className="text-secondary small ms-1">({row.requester.empId})</span> : null}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td>
+                          <span className={`badge ${getStatusBadgeClass(row.status)}`}>{String(row.status ?? '').replaceAll('_', ' ')}</span>
+                        </td>
+                        <td>
+                          <span className={`badge rounded-pill ${getPriorityBadgeClass(row.priority)}`}>{row.priority}</span>
+                        </td>
+                        <td className="small text-nowrap">{formatDateTime(row.resolvedAt)}</td>
+                        <td className="small text-nowrap">{formatDateTime(row.closedAt)}</td>
+                        <td className="small">{row.closureSummary ?? '—'}</td>
+                        <td className="text-end">
+                          <Link to={`/tickets/${row.ticketNumber}`} className="btn btn-sm btn-outline-primary">
+                            Open
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="d-md-none">
+              <div className="vstack gap-3 p-3">
+                {rows.map((row) => (
+                  <div key={row.id} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <div className="fw-semibold text-dark">{row.ticketNumber}</div>
+                        <div className="d-flex flex-column align-items-end gap-1 flex-shrink-0">
+                          <span className={`badge ${getStatusBadgeClass(row.status)}`}>{String(row.status ?? '').replaceAll('_', ' ')}</span>
+                          <span className={`badge rounded-pill ${getPriorityBadgeClass(row.priority)}`}>{row.priority}</span>
+                        </div>
+                      </div>
+                      <div className="fw-semibold text-dark text-break mb-2">{row.title}</div>
+                      {row.description ? <div className="small text-secondary text-break mb-3">{row.description}</div> : null}
+                      <div className="vstack gap-2 small entity-mobile-fields">
+                        <div>
+                          <div className="entity-mobile-field-label">Handling dept</div>
+                          <div className="text-break text-dark">{row.department?.name ?? '—'}</div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Requester dept</div>
+                          <div className="text-break text-dark">{row.requesterDepartment?.name ?? row.department?.name ?? '—'}</div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Assigned to</div>
+                          <div className="text-dark">
+                            {row.assignedTo?.fullName ? (
+                              <span>
+                                {row.assignedTo.fullName}
+                                {row.assignedTo?.empId ? <span className="text-secondary small ms-1">({row.assignedTo.empId})</span> : null}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Raised by</div>
+                          <div className="text-dark">
+                            {row.requester?.fullName ? (
+                              <span>
+                                {row.requester.fullName}
+                                {row.requester?.empId ? <span className="text-secondary small ms-1">({row.requester.empId})</span> : null}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Resolved</div>
+                          <div className="text-dark">{formatDateTime(row.resolvedAt)}</div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Closed</div>
+                          <div className="text-dark">{formatDateTime(row.closedAt)}</div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Closure</div>
+                          <div className="text-break text-dark">{row.closureSummary ?? '—'}</div>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-top">
+                        <Link to={`/tickets/${row.ticketNumber}`} className="btn btn-sm btn-outline-primary w-100">
+                          Open ticket
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
           {meta ? (

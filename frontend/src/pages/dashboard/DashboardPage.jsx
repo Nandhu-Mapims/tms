@@ -78,14 +78,16 @@ function DashboardPage() {
   return (
     <div className="d-grid gap-4">
       <section className="hero-card card border-0 shadow-sm">
-        <div className="card-body p-4 p-lg-5">
-          <div className="row align-items-center g-4">
+        <div className="card-body p-3 p-md-4 p-lg-5">
+          <div className="row align-items-center g-3 g-md-4">
             <div className="col-lg-8">
-              <span className="badge rounded-pill text-bg-primary-soft text-primary px-3 py-2 mb-3">
+              <span className="badge rounded-pill text-bg-primary-soft text-primary px-3 py-2 mb-2 mb-md-3">
                 {ROLE_LABELS[user?.role] || user?.role}
               </span>
-              <h1 className="display-6 fw-bold text-dark mb-3">Welcome to the hospital service dashboard.</h1>
-              <p className="text-secondary fs-5 mb-0">
+              <h1 className="fw-bold text-dark mb-2 mb-md-3 fs-4">
+                Welcome to the hospital service dashboard.
+              </h1>
+              <p className="text-secondary mb-0 fs-6">
                 View ticket KPIs and operational summary. Data is scoped to your role and permissions.
               </p>
             </div>

@@ -65,49 +65,94 @@ function LeadershipAssignmentsPage() {
       {isLoading ? (
         <LoadingCard message="Loading assignments..." />
       ) : items.length ? (
-        <div className="card border-0 shadow-sm">
-          <div className="table-responsive">
-            <table className="table align-middle mb-0">
-              <thead className="table-light">
-                <tr>
-                  <th>Ticket</th>
-                  <th>Subject</th>
-                  <th>Assigned by</th>
-                  <th>When</th>
-                  <th className="text-end">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row) => {
-                  const roleKey = row?.actorRole ?? '';
-                  const roleLabel = ROLE_LABEL[roleKey] ?? 'Leadership';
-                  const ticketRef = row?.ticketNumber || row?.ticketId || '';
+        <div className="card border-0 shadow-sm overflow-hidden">
+          <div className="d-none d-md-block">
+            <div className="table-responsive">
+              <table className="table align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Subject</th>
+                    <th>Assigned by</th>
+                    <th>When</th>
+                    <th className="text-end">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((row) => {
+                    const roleKey = row?.actorRole ?? '';
+                    const roleLabel = ROLE_LABEL[roleKey] ?? 'Leadership';
+                    const ticketRef = row?.ticketNumber || row?.ticketId || '';
 
-                  return (
-                    <tr key={row.id}>
-                      <td className="fw-semibold text-dark">{row.ticketNumber || '—'}</td>
-                      <td>
-                        <span className="text-secondary small">{row.ticketTitle || '—'}</span>
-                      </td>
-                      <td>
-                        <span className="fw-medium">{row.actorName || 'Staff'}</span>
-                        <span className="text-secondary small ms-1">({roleLabel})</span>
-                      </td>
-                      <td className="small text-secondary">{row.createdAt ? formatDateTime(row.createdAt) : '—'}</td>
-                      <td className="text-end">
-                        {ticketRef ? (
-                          <Link to={`/tickets/${ticketRef}`} className="btn btn-sm btn-outline-primary">
+                    return (
+                      <tr key={row.id}>
+                        <td className="fw-semibold text-dark">{row.ticketNumber || '—'}</td>
+                        <td>
+                          <span className="text-secondary small">{row.ticketTitle || '—'}</span>
+                        </td>
+                        <td>
+                          <span className="fw-medium">{row.actorName || 'Staff'}</span>
+                          <span className="text-secondary small ms-1">({roleLabel})</span>
+                        </td>
+                        <td className="small text-secondary">{row.createdAt ? formatDateTime(row.createdAt) : '—'}</td>
+                        <td className="text-end">
+                          {ticketRef ? (
+                            <Link to={`/tickets/${ticketRef}`} className="btn btn-sm btn-outline-primary">
+                              Open ticket
+                            </Link>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="d-md-none">
+            <div className="vstack gap-3 p-3">
+              {items.map((row) => {
+                const roleKey = row?.actorRole ?? '';
+                const roleLabel = ROLE_LABEL[roleKey] ?? 'Leadership';
+                const ticketRef = row?.ticketNumber || row?.ticketId || '';
+
+                return (
+                  <div key={row.id} className="card border shadow-sm entity-mobile-card">
+                    <div className="card-body p-3">
+                      <div className="fw-semibold text-dark mb-1">{row.ticketNumber || '—'}</div>
+                      <div className="vstack gap-2 small entity-mobile-fields">
+                        <div>
+                          <div className="entity-mobile-field-label">Subject</div>
+                          <div className="text-break text-dark">{row.ticketTitle || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">Assigned by</div>
+                          <div className="text-dark">
+                            <span className="fw-medium">{row.actorName || 'Staff'}</span>
+                            <span className="text-secondary"> ({roleLabel})</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="entity-mobile-field-label">When</div>
+                          <div className="text-secondary">{row.createdAt ? formatDateTime(row.createdAt) : '—'}</div>
+                        </div>
+                      </div>
+                      {ticketRef ? (
+                        <div className="mt-3 pt-3 border-top">
+                          <Link to={`/tickets/${ticketRef}`} className="btn btn-sm btn-outline-primary w-100">
                             Open ticket
                           </Link>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="px-4 pb-4">
+
+          <div className="px-3 px-md-4 pb-4">
             <PaginationControls meta={meta} onPageChange={(next) => load(next)} />
           </div>
         </div>
