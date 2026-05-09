@@ -13,6 +13,7 @@ const slaConfigRoutes = require('../modules/slaConfig/slaConfig.routes');
 const ticketRoutes = require('../modules/ticket/ticket.routes');
 const userRoutes = require('../modules/user/user.routes');
 const reportRoutes = require('../modules/report/report.routes');
+const feedbackIntegrationRoutes = require('../modules/feedbackIntegration/feedbackIntegration.routes');
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ router.use('/locations', locationRoutes);
 router.use('/sla-configs', slaConfigRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/reports', reportRoutes);
+router.use('/integrations/feedback', feedbackIntegrationRoutes);
 
 // Fallback for unknown routes.
 router.all('*', (req, res) => {
