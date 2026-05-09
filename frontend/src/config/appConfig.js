@@ -1,6 +1,6 @@
 export const APP_NAME = 'MAPIMS';
 export const APP_SUBTITLE = 'Hospital Ticket Management System';
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 export const API_PUBLIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 /** Feedback System API origin (where `/uploads/...` voice files are served). Shown as audio on TMS feedback tickets. */

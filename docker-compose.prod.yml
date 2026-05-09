@@ -1,0 +1,93 @@
+# TMS (MAPIMS) — production stack for Docker hosting
+#
+# Does not publish MongoDB to the host (DB only on the internal network).
+# Host ports (same as dev compose; adjust if another stack already uses them):
+#   HTTP (SPA + /api proxy): 8090 -> frontend:80
+#   Direct API (optional):   5013 -> backend:5000
+#
+# Usage on the server:
+#   Put production secrets in backend/.env (JWT_SECRET, CLIENT_URL, etc.), then:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Optional: a `.env` file next to this YAML can override MONGODB_URI for Compose interpolation.
+# Set CLIENT_URL in backend/.env to your public URL, e.g. https://tms.example.com
+# If TLS terminates on a reverse proxy, publish only 8090 (or map 80/443 via the proxy).
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: tms_mongo
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - tms_internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: tms-backend:prod
+    container_name: tms_backend
+    env_file:
+      - ./backend/.env
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/tms_hospital}
+      MONGODB_SERVER_SELECTION_TIMEOUT_MS: ${MONGODB_SERVER_SELECTION_TIMEOUT_MS:-10000}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-10}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "5013:5000"
+    volumes:
+      - uploads_data:/app/uploads
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:5000/api/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - tms_internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    image: tms-frontend:prod
+    container_name: tms_frontend
+    ports:
+      - "8090:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tms_internal
+
+volumes:
+  mongo_data:
+  uploads_data:
+
+networks:
+  tms_internal:
+    driver: bridge
