@@ -4,7 +4,9 @@
 # PORTS (avoid clashes with gen_cl 5011/8088, gen_cl_dental 5012/8089):
 #   backend:  5013:5000
 #   frontend: 8090:80
-#   mongo:    internal only (mongodb://mongo:27017/tms_hospital)
+#   mongo:    no host port by default (avoids clash with local MongoDB on 27017).
+#             Backend uses mongodb://mongo:27017 inside the compose network.
+#             To access Mongo from the host, uncomment ports below (try 27018:27017).
 #
 # Optional: create `.env` next to this file to override JWT_SECRET, CLIENT_URL, etc.
 # Seed:     docker compose run --rm backend npm run seed
@@ -13,8 +15,8 @@ services:
   mongo:
     image: mongo:7
     container_name: tms_mongo
-    ports:
-      - "27017:27017"
+    # ports:
+    #   - "27018:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -47,6 +49,12 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 45s
     ports:
       - "5013:5000"
     volumes:
@@ -63,7 +71,8 @@ services:
     ports:
       - "8090:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
