@@ -6,6 +6,13 @@ function TicketTable({ tickets, userId = '', userRole = '', onCancelRequest = nu
   const normalizedUserId = String(userId ?? '');
   const isOrgWideViewer = ['ADMIN', 'CHIEF'].includes(String(userRole ?? ''));
   const showHandlingAndRequester = isOrgWideViewer;
+  const isFeedbackTicket = (ticket) =>
+    String(ticket?.department?.name ?? '').trim().toLowerCase() === 'feedback tickets' ||
+    String(ticket?.category?.name ?? '').trim().toLowerCase() === 'feedback tickets';
+  const requesterDepartmentLabel = (ticket) =>
+    isFeedbackTicket(ticket) ? 'Patient' : ticket.requesterDepartment?.name || ticket.department?.name || 'Not available';
+  const requesterNameLabel = (ticket) =>
+    isFeedbackTicket(ticket) ? 'Patient' : ticket.requester?.fullName || 'Not available';
 
   const renderTransferCell = (ticket) =>
     ticket.transferRequestsPending?.length ? (
@@ -65,12 +72,12 @@ function TicketTable({ tickets, userId = '', userRole = '', onCancelRequest = nu
                   {showHandlingAndRequester ? (
                     <td>{ticket.department?.name || 'Not available'}</td>
                   ) : (
-                    <td>{ticket.requesterDepartment?.name || ticket.department?.name || 'Not available'}</td>
+                    <td>{requesterDepartmentLabel(ticket)}</td>
                   )}
                   {showHandlingAndRequester ? (
-                    <td>{ticket.requesterDepartment?.name || ticket.department?.name || 'Not available'}</td>
+                    <td>{requesterDepartmentLabel(ticket)}</td>
                   ) : null}
-                  <td>{ticket.requester?.fullName || 'Not available'}</td>
+                  <td>{requesterNameLabel(ticket)}</td>
                   <td>{ticket.assignedTo?.fullName || 'Unassigned'}</td>
                   <td>{renderTransferCell(ticket)}</td>
                   <td>
@@ -109,7 +116,7 @@ function TicketTable({ tickets, userId = '', userRole = '', onCancelRequest = nu
                       <div>
                         <div className="entity-mobile-field-label">Requester Department</div>
                         <div className="text-break text-dark">
-                          {ticket.requesterDepartment?.name || ticket.department?.name || 'Not available'}
+                          {requesterDepartmentLabel(ticket)}
                         </div>
                       </div>
                     </>
@@ -117,13 +124,13 @@ function TicketTable({ tickets, userId = '', userRole = '', onCancelRequest = nu
                     <div>
                       <div className="entity-mobile-field-label">Requester Department</div>
                       <div className="text-break text-dark">
-                        {ticket.requesterDepartment?.name || ticket.department?.name || 'Not available'}
+                        {requesterDepartmentLabel(ticket)}
                       </div>
                     </div>
                   )}
                   <div>
                     <div className="entity-mobile-field-label">Requester</div>
-                    <div className="text-dark">{ticket.requester?.fullName || 'Not available'}</div>
+                    <div className="text-dark">{requesterNameLabel(ticket)}</div>
                   </div>
                   <div>
                     <div className="entity-mobile-field-label">Handled By</div>

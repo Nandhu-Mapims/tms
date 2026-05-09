@@ -33,6 +33,10 @@ const ticketSchema = new mongoose.Schema(
     closedAt: { type: Date, default: null },
     escalatedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
+
+    /** Set when synced from Feedback System — used to stream /uploads/... from that origin. */
+    feedbackSourceId: { type: String, default: null },
+    feedbackVoiceRecordingRelPath: { type: String, default: null },
   },
   { timestamps: true }
 );

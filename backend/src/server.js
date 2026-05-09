@@ -2,6 +2,7 @@ const http = require('http');
 const app = require('./app');
 const { env } = require('./config');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
+const { ensureFeedbackSection } = require('./bootstrap/ensureFeedbackSection');
 
 const server = http.createServer(app);
 
@@ -19,6 +20,8 @@ const startServer = async () => {
   try {
     await connectDatabase();
     console.log('Database connected successfully');
+    await ensureFeedbackSection();
+    console.log('Feedback Tickets section ensured');
 
     server.listen(env.port, () => {
       console.log(`Server listening on port ${env.port}`);

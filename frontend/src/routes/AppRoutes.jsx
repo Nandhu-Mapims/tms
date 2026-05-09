@@ -34,6 +34,7 @@ function AppRoutes() {
             <Route path="/reports" element={<ReportsPage />} />
           </Route>
           <Route path="/tickets" element={<TicketListPage />} />
+          <Route path="/feedback-tickets" element={<TicketListPage mode="feedback" />} />
           <Route element={<ProtectedRoute allowedRoles={['HOD']} />}>
             <Route path="/hod-to-hod-tickets" element={<HodToHodTicketsPage />} />
           </Route>

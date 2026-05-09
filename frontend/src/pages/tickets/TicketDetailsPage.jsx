@@ -42,6 +42,7 @@ import {
   getTimeTakenLabel,
 } from '../../utils/ticketHelpers';
 import { getErrorMessage } from '../../utils/getErrorMessage';
+import { FEEDBACK_SYSTEM_ORIGIN } from '../../config/appConfig';
 
 const CHAT_POLL_INTERVAL_MS = 10_000;
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -459,6 +460,19 @@ function TicketDetailsPage() {
   const filteredRequesterSubcategories = selectedCategoryId
     ? requesterSubcategorySource.filter((item) => String(item?.categoryId ?? '') === selectedCategoryId)
     : requesterSubcategorySource;
+  const isFeedbackTicket =
+    String(ticket?.department?.name ?? '').trim().toLowerCase() === 'feedback tickets' ||
+    String(ticket?.category?.name ?? '').trim().toLowerCase() === 'feedback tickets';
+  const requesterDepartmentText = isFeedbackTicket
+    ? 'Patient'
+    : ticket?.requesterDepartment?.name || ticket?.department?.name || 'Not available';
+
+  const feedbackVoiceSrc = (() => {
+    const rel = String(ticket?.feedbackVoiceRecordingRelPath ?? '').trim();
+    if (!rel || !FEEDBACK_SYSTEM_ORIGIN) return null;
+    const origin = FEEDBACK_SYSTEM_ORIGIN.replace(/\/$/, '');
+    return `${origin}/uploads/${rel.replace(/^\/+/, '')}`;
+  })();
 
   const handleCancelOutgoingTransferRequest = () => {
     if (!outgoingTransferRequest?.id) return;
@@ -1124,6 +1138,19 @@ function TicketDetailsPage() {
                 <div>
                   <h2 className="h5 fw-semibold mb-2">Ticket Overview</h2>
                   <p className="text-secondary mb-0">{ticket.description}</p>
+                  {isFeedbackTicket && ticket.feedbackVoiceRecordingRelPath ? (
+                    <div className="mt-3 pt-3 border-top">
+                      <div className="fw-semibold text-body mb-2">Voice recording</div>
+                      {feedbackVoiceSrc ? (
+                        <audio className="w-100" style={{ maxWidth: '28rem' }} controls preload="metadata" src={feedbackVoiceSrc} crossOrigin="anonymous" />
+                      ) : (
+                        <p className="text-muted small mb-0">
+                          Set <code>VITE_FEEDBACK_SYSTEM_ORIGIN</code> in the TMS frontend env to the Feedback API base URL
+                          (e.g. http://localhost:5000), then reload. This builds the playback URL for stored voice files.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
                 <TicketStatusBadge status={ticket.status} priority={ticket.priority} />
               </div>
@@ -1137,13 +1164,13 @@ function TicketDetailsPage() {
                     </div>
                     <div className="col-md-6">
                       <span className="text-secondary d-block">Requester Department</span>
-                      <span className="fw-semibold">{ticket.requesterDepartment?.name || ticket.department?.name || 'Not available'}</span>
+                      <span className="fw-semibold">{requesterDepartmentText}</span>
                     </div>
                   </>
                 ) : (
                   <div className="col-md-6">
                     <span className="text-secondary d-block">Requester Department</span>
-                    <span className="fw-semibold">{ticket.requesterDepartment?.name || ticket.department?.name || 'Not available'}</span>
+                    <span className="fw-semibold">{requesterDepartmentText}</span>
                   </div>
                 )}
                 <div className="col-md-6">

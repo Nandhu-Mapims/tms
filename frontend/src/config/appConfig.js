@@ -1,7 +1,10 @@
 export const APP_NAME = 'MAPIMS';
 export const APP_SUBTITLE = 'Hospital Ticket Management System';
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
 export const API_PUBLIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
+
+/** Feedback System API origin (where `/uploads/...` voice files are served). Shown as audio on TMS feedback tickets. */
+export const FEEDBACK_SYSTEM_ORIGIN = (import.meta.env.VITE_FEEDBACK_SYSTEM_ORIGIN || '').trim();
 
 export const ROLE_LABELS = {
   ADMIN: 'Administrator',
@@ -24,6 +27,13 @@ export const NAV_ITEMS = [
     label: 'Tickets',
     icon: 'bi-file-earmark-medical',
     path: '/tickets',
+    roles: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD', 'REQUESTER'],
+  },
+  {
+    key: 'feedback-tickets',
+    label: 'Feedback Tickets',
+    icon: 'bi-chat-left-text',
+    path: '/feedback-tickets',
     roles: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD', 'REQUESTER'],
   },
   {

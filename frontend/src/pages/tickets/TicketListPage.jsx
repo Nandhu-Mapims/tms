@@ -35,10 +35,11 @@ const initialFilters = {
   limit: 10,
 };
 
-function TicketListPage() {
+function TicketListPage({ mode = 'all' }) {
   const toast = useToast();
   const { confirm } = useConfirmDialog();
   const { user } = useAuth();
+  const isFeedbackMode = mode === 'feedback';
   const [filters, setFilters] = useState(initialFilters);
   const [draftFilters, setDraftFilters] = useState(initialFilters);
   const [isHandledByMeOnly, setIsHandledByMeOnly] = useState(false);
@@ -48,6 +49,10 @@ function TicketListPage() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [pageError, setPageError] = useState('');
   const [masterData, setMasterData] = useState({ categories: [], departments: [] });
+  const feedbackCategory = masterData.categories.find(
+    (category) => String(category?.name ?? '').trim().toLowerCase() === 'feedback tickets'
+  );
+  const feedbackCategoryId = feedbackCategory?.id ?? '';
 
   useEffect(() => {
     const loadMasterData = async () => {
@@ -73,11 +78,21 @@ function TicketListPage() {
       setPageError('');
 
       try {
+        if (isFeedbackMode && !feedbackCategoryId) {
+          setTickets([]);
+          setMeta({ total: 0, count: 0, page: 1, limit: filters.limit, totalPages: 1 });
+          setPageError('Feedback Tickets category is not available yet. Create/sync one from Feedback system first.');
+          return;
+        }
         const userId = String(user?.id ?? '');
+        const baseFilters =
+          isFeedbackMode && feedbackCategoryId
+            ? { ...filters, categoryId: feedbackCategoryId }
+            : filters;
         const effectiveFilters =
           isHandledByMeOnly && userId
-            ? { ...filters, assignedToId: userId, excludePendingHandoff: true }
-            : filters;
+            ? { ...baseFilters, assignedToId: userId, excludePendingHandoff: true }
+            : baseFilters;
         const response = await getTicketsRequest(effectiveFilters);
         setTickets(response.data);
         setMeta(response.meta);
@@ -91,7 +106,17 @@ function TicketListPage() {
     };
 
     loadTickets();
-  }, [filters, isHandledByMeOnly, toast, user?.id]);
+  }, [feedbackCategoryId, filters, isFeedbackMode, isHandledByMeOnly, toast, user?.id]);
+
+  useEffect(() => {
+    if (!isFeedbackMode || !feedbackCategoryId) return;
+    setDraftFilters((prev) =>
+      prev.categoryId === feedbackCategoryId ? prev : { ...prev, categoryId: feedbackCategoryId, page: 1 }
+    );
+    setFilters((prev) =>
+      prev.categoryId === feedbackCategoryId ? prev : { ...prev, categoryId: feedbackCategoryId, page: 1 }
+    );
+  }, [feedbackCategoryId, isFeedbackMode]);
 
   const handleDraftChange = (name, value) => {
     setDraftFilters((prev) => ({ ...prev, [name]: value }));
@@ -102,8 +127,11 @@ function TicketListPage() {
   };
 
   const handleResetFilters = () => {
-    setDraftFilters(initialFilters);
-    setFilters(initialFilters);
+    const nextFilters = isFeedbackMode && feedbackCategoryId
+      ? { ...initialFilters, categoryId: feedbackCategoryId }
+      : initialFilters;
+    setDraftFilters(nextFilters);
+    setFilters(nextFilters);
     setIsHandledByMeOnly(false);
   };
 
@@ -171,7 +199,15 @@ function TicketListPage() {
 
   return (
     <>
-      <PageHeader title="Tickets" subtitle="Track hospital requests, assignments, and service progress." actions={actions} />
+      <PageHeader
+        title={isFeedbackMode ? 'Feedback Tickets' : 'Tickets'}
+        subtitle={
+          isFeedbackMode
+            ? 'View tickets created from the Feedback system.'
+            : 'Track hospital requests, assignments, and service progress.'
+        }
+        actions={actions}
+      />
       {pageError ? <div className="alert alert-danger">{pageError}</div> : null}
       <TicketFilters
         filters={draftFilters}
