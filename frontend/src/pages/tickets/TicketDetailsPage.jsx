@@ -42,7 +42,7 @@ import {
   getTimeTakenLabel,
 } from '../../utils/ticketHelpers';
 import { getErrorMessage } from '../../utils/getErrorMessage';
-import { FEEDBACK_SYSTEM_ORIGIN } from '../../config/appConfig';
+import { getFeedbackSystemOrigin } from '../../config/appConfig';
 
 const CHAT_POLL_INTERVAL_MS = 10_000;
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -469,8 +469,8 @@ function TicketDetailsPage() {
 
   const feedbackVoiceSrc = (() => {
     const rel = String(ticket?.feedbackVoiceRecordingRelPath ?? '').trim();
-    if (!rel || !FEEDBACK_SYSTEM_ORIGIN) return null;
-    const origin = FEEDBACK_SYSTEM_ORIGIN.replace(/\/$/, '');
+    const origin = getFeedbackSystemOrigin().replace(/\/$/, '');
+    if (!rel || !origin) return null;
     return `${origin}/uploads/${rel.replace(/^\/+/, '')}`;
   })();
 
@@ -1145,8 +1145,9 @@ function TicketDetailsPage() {
                         <audio className="w-100" style={{ maxWidth: '28rem' }} controls preload="metadata" src={feedbackVoiceSrc} crossOrigin="anonymous" />
                       ) : (
                         <p className="text-muted small mb-0">
-                          Set <code>VITE_FEEDBACK_SYSTEM_ORIGIN</code> in the TMS frontend env to the Feedback API base URL
-                          (e.g. http://localhost:5000), then reload. This builds the playback URL for stored voice files.
+                          Voice file path is stored on this ticket but the Feedback server URL is unknown. Set{' '}
+                          <code>VITE_FEEDBACK_SYSTEM_ORIGIN</code> (e.g. https://feedback.mapims.edu.in) in the TMS frontend
+                          build, or open this app on <code>tms.mapims.edu.in</code> for the default pairing.
                         </p>
                       )}
                     </div>
