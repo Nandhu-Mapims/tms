@@ -65,6 +65,7 @@ function TicketDetailsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [feedbackVoiceLoadError, setFeedbackVoiceLoadError] = useState(false);
   const moreRef = useRef(null);
   const [transferState, setTransferState] = useState({
     open: false,
@@ -124,6 +125,10 @@ function TicketDetailsPage() {
   useEffect(() => {
     loadTicketDetails();
   }, [id]);
+
+  useEffect(() => {
+    setFeedbackVoiceLoadError(false);
+  }, [id, ticket?.feedbackVoiceRecordingRelPath]);
 
   useEffect(() => {
     if (!isMoreOpen) return undefined;
@@ -1142,7 +1147,27 @@ function TicketDetailsPage() {
                     <div className="mt-3 pt-3 border-top">
                       <div className="fw-semibold text-body mb-2">Voice recording</div>
                       {feedbackVoiceSrc ? (
-                        <audio className="w-100" style={{ maxWidth: '28rem' }} controls preload="metadata" src={feedbackVoiceSrc} crossOrigin="anonymous" />
+                        <>
+                          <audio
+                            key={feedbackVoiceSrc}
+                            className="w-100"
+                            style={{ maxWidth: '28rem' }}
+                            controls
+                            preload="metadata"
+                            src={feedbackVoiceSrc}
+                            onLoadedMetadata={() => setFeedbackVoiceLoadError(false)}
+                            onError={() => setFeedbackVoiceLoadError(true)}
+                          />
+                          {feedbackVoiceLoadError ? (
+                            <p className="text-danger small mt-2 mb-0">
+                              Could not load this recording (404, wrong URL, or blocked). Open the file directly:{' '}
+                              <a href={feedbackVoiceSrc} target="_blank" rel="noopener noreferrer">
+                                {feedbackVoiceSrc}
+                              </a>
+                              . Ensure the Feedback API serves <code>/uploads</code> on that host and the file exists.
+                            </p>
+                          ) : null}
+                        </>
                       ) : (
                         <p className="text-muted small mb-0">
                           Voice file path is stored on this ticket but the Feedback server URL is unknown. Set{' '}
