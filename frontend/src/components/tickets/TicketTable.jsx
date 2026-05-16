@@ -7,12 +7,14 @@ function TicketTable({ tickets, userId = '', userRole = '', onCancelRequest = nu
   const isOrgWideViewer = ['ADMIN', 'CHIEF'].includes(String(userRole ?? ''));
   const showHandlingAndRequester = isOrgWideViewer;
   const isFeedbackTicket = (ticket) =>
+    Boolean(ticket?.isFeedbackTicket) ||
+    String(ticket?.feedbackSourceId ?? '').trim().length > 0 ||
     String(ticket?.department?.name ?? '').trim().toLowerCase() === 'feedback tickets' ||
     String(ticket?.category?.name ?? '').trim().toLowerCase() === 'feedback tickets';
   const requesterDepartmentLabel = (ticket) =>
     isFeedbackTicket(ticket) ? 'Patient' : ticket.requesterDepartment?.name || ticket.department?.name || 'Not available';
   const requesterNameLabel = (ticket) =>
-    isFeedbackTicket(ticket) ? 'Patient' : ticket.requester?.fullName || 'Not available';
+    isFeedbackTicket(ticket) ? ticket.feedbackPatientName || 'Patient' : ticket.requester?.fullName || 'Not available';
 
   const renderTransferCell = (ticket) =>
     ticket.transferRequestsPending?.length ? (
@@ -30,6 +32,7 @@ function TicketTable({ tickets, userId = '', userRole = '', onCancelRequest = nu
       </Link>
       {onCancelRequest &&
       normalizedUserId &&
+      !isFeedbackTicket(ticket) &&
       String(ticket?.requesterId ?? '') === normalizedUserId &&
       ['NEW', 'OPEN'].includes(String(ticket?.status ?? '')) ? (
         <button

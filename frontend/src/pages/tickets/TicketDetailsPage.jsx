@@ -446,11 +446,18 @@ function TicketDetailsPage() {
   const canResolveForUser = Boolean(canResolve && (!requiresAssignmentForRole || isAssignedToCurrentUser));
   const canClose = canCloseTicket(user?.role);
   const canCloseForUser = Boolean(canClose && (!requiresAssignmentForRole || isAssignedToCurrentUser));
-  const isTicketRequester = String(ticket?.requesterId ?? '') === String(user?.id ?? '');
+  const isFeedbackTicket =
+    Boolean(ticket?.isFeedbackTicket) ||
+    String(ticket?.feedbackSourceId ?? '').trim().length > 0 ||
+    String(ticket?.department?.name ?? '').trim().toLowerCase() === 'feedback tickets' ||
+    String(ticket?.category?.name ?? '').trim().toLowerCase() === 'feedback tickets';
+  const feedbackPatientName = isFeedbackTicket ? ticket?.feedbackPatientName || 'Patient' : null;
+  const isTicketRequester = !isFeedbackTicket && String(ticket?.requesterId ?? '') === String(user?.id ?? '');
   const canAdminForceCloseResolved =
-    user?.role === 'ADMIN' && canCloseForUser && ticket?.status === 'RESOLVED';
+    user?.role === 'ADMIN' && canCloseForUser && ticket?.status === 'RESOLVED' && !isFeedbackTicket;
+  const canCloseFeedbackResolved = Boolean(isFeedbackTicket && canCloseForUser && ticket?.status === 'RESOLVED');
   const canConfirmResolutionClose = isTicketRequester && ticket?.status === 'RESOLVED';
-  const canRequesterCancelOpening = isTicketRequester && ['NEW', 'OPEN'].includes(ticket?.status);
+  const canRequesterCancelOpening = !isFeedbackTicket && isTicketRequester && ['NEW', 'OPEN'].includes(ticket?.status);
   const canReopen = canReopenTicket(user?.role);
   const canReopenForUser = Boolean(canReopen && (!requiresAssignmentForRole || isAssignedToCurrentUser));
   const canEscalate = canEscalateTicket(user?.role);
@@ -459,15 +466,12 @@ function TicketDetailsPage() {
   const isResolvedState = ['RESOLVED', 'CLOSED', 'CANCELLED'].includes(ticket?.status);
   const pendingTransferList = Array.isArray(ticket?.transferRequestsPending) ? ticket.transferRequestsPending : [];
   const outgoingTransferRequest = pendingTransferList.find((tr) => tr.isOutgoing) ?? null;
-  const canRequesterEditOpenDetails = isTicketRequester && ticket?.status === 'OPEN';
+  const canRequesterEditOpenDetails = !isFeedbackTicket && isTicketRequester && ticket?.status === 'OPEN';
   const selectedCategoryId = String(requesterEditState?.categoryId ?? '');
   const requesterSubcategorySource = Array.isArray(requesterEditState?.subcategories) ? requesterEditState.subcategories : [];
   const filteredRequesterSubcategories = selectedCategoryId
     ? requesterSubcategorySource.filter((item) => String(item?.categoryId ?? '') === selectedCategoryId)
     : requesterSubcategorySource;
-  const isFeedbackTicket =
-    String(ticket?.department?.name ?? '').trim().toLowerCase() === 'feedback tickets' ||
-    String(ticket?.category?.name ?? '').trim().toLowerCase() === 'feedback tickets';
   const requesterDepartmentText = isFeedbackTicket
     ? 'Patient'
     : ticket?.requesterDepartment?.name || ticket?.department?.name || 'Not available';
@@ -495,14 +499,14 @@ function TicketDetailsPage() {
     });
   };
 
-  const canPostComments = Boolean(isOperationsStaff || isTicketRequester);
+  const canPostComments = Boolean(isOperationsStaff || (!isFeedbackTicket && isTicketRequester));
   const canUploadAttachments =
     user?.role === 'CHIEF'
       ? false
       : user?.role === 'ADMIN' || user?.role === 'HOD'
         ? true
         : user?.role === 'REQUESTER'
-          ? isTicketRequester
+          ? !isFeedbackTicket && isTicketRequester
           : user?.role === 'HELPDESK'
             ? isAssignedToCurrentUser || !ticket?.assignedToId
             : false;
@@ -518,7 +522,7 @@ function TicketDetailsPage() {
         : user?.role === 'HELPDESK'
           ? isAssignedToCurrentUser
           : user?.role === 'REQUESTER'
-            ? isTicketRequester
+            ? !isFeedbackTicket && isTicketRequester
             : false;
 
   const primaryActions = [];
@@ -597,10 +601,14 @@ function TicketDetailsPage() {
         onClick={() =>
           executeAction({
             action: () => resolveTicketRequest(id, { resolutionNote: 'Resolved from ticket detail page.' }),
-            successMessage: 'Ticket resolved. The requester must confirm before it is fully closed.',
+            successMessage: isFeedbackTicket
+              ? 'Feedback ticket resolved. You can close it after sending your response.'
+              : 'Ticket resolved. The requester must confirm before it is fully closed.',
             confirmOptions: {
               title: 'Resolve Ticket',
-              message: 'Mark this ticket as resolved? The requester will need to confirm before the ticket can be fully closed.',
+              message: isFeedbackTicket
+                ? 'Mark this feedback ticket as resolved? Staff can close it directly once the response is ready.'
+                : 'Mark this ticket as resolved? The requester will need to confirm before it can be fully closed.',
               confirmText: 'Resolve',
               variant: 'primary',
             },
@@ -633,6 +641,31 @@ function TicketDetailsPage() {
         }
       >
         Confirm fix & close
+      </button>
+    );
+  }
+
+  if (canCloseFeedbackResolved) {
+    primaryActions.push(
+      <button
+        key="close-feedback"
+        type="button"
+        className="btn btn-outline-success"
+        disabled={isActionLoading}
+        onClick={() =>
+          executeAction({
+            action: () => closeTicketRequest(id),
+            successMessage: 'Feedback ticket closed successfully.',
+            confirmOptions: {
+              title: 'Close Feedback Ticket',
+              message: 'Close this feedback ticket now? Make sure the final response has been recorded before closing.',
+              confirmText: 'Close Ticket',
+              variant: 'warning',
+            },
+          })
+        }
+      >
+        Close feedback ticket
       </button>
     );
   }
@@ -896,7 +929,12 @@ function TicketDetailsPage() {
           Support has marked this ticket <strong>resolved</strong>. If the issue is fixed, use <strong>Confirm fix & close</strong> to fully close it.
         </div>
       ) : null}
-      {ticket.status === 'RESOLVED' && isOperationsStaff && !isTicketRequester ? (
+      {ticket.status === 'RESOLVED' && isFeedbackTicket && isOperationsStaff ? (
+        <div className="alert alert-secondary mb-3">
+          This is a <strong>feedback ticket</strong>. There is no requester login for patient confirmation, so staff can close it directly after recording the response.
+        </div>
+      ) : null}
+      {ticket.status === 'RESOLVED' && !isFeedbackTicket && isOperationsStaff && !isTicketRequester ? (
         <div className="alert alert-secondary mb-3">
           This ticket is resolved and waiting for the <strong>requester</strong> to confirm before it can be fully closed.
         </div>
@@ -1199,6 +1237,12 @@ function TicketDetailsPage() {
                     <span className="fw-semibold">{requesterDepartmentText}</span>
                   </div>
                 )}
+                <div className="col-md-6">
+                  <span className="text-secondary d-block">{isFeedbackTicket ? 'Patient Name' : 'Requester'}</span>
+                  <span className="fw-semibold">
+                    {isFeedbackTicket ? feedbackPatientName : ticket.requester?.fullName || 'Not available'}
+                  </span>
+                </div>
                 <div className="col-md-6">
                   <span className="text-secondary d-block">Category</span>
                   <span className="fw-semibold">

@@ -95,6 +95,9 @@ const ensureAssigneeOrStaff = (user, ticket) => {
 };
 
 const computeDueAt = (ticket) => ticket?.resolutionDueAt ?? ticket?.firstResponseDueAt ?? null;
+const isFeedbackTicketRecord = (ticket) =>
+  Boolean(String(ticket?.feedbackSourceId ?? '').trim() || String(ticket?.feedbackPatientName ?? '').trim());
+const getFeedbackPatientName = (ticket) => String(ticket?.feedbackPatientName ?? '').trim() || 'Patient';
 
 const buildTicketNumber = ({ categoryCode, year, runningNumber }) =>
   `TKT-${categoryCode}-${year}-${String(runningNumber).padStart(4, '0')}`;
@@ -565,6 +568,7 @@ const loadPendingTransfersByTicketId = async (ticketMongoIds) => {
 
 const shapeTicket = (ticket) => {
   const t = ticket?.toObject ? ticket.toObject() : ticket;
+  const isFeedbackTicket = isFeedbackTicketRecord(t);
   return {
     ...t,
     id: t?._id?.toString?.() ?? t?.id,
@@ -585,6 +589,10 @@ const shapeTicket = (ticket) => {
     requesterId: t?.requesterId?._id?.toString?.() ?? t?.requesterId,
     assignedToId: t?.assignedToId?._id?.toString?.() ?? t?.assignedToId ?? null,
     requesterResolutionConfirmedAt: t?.requesterResolutionConfirmedAt ?? null,
+    isFeedbackTicket,
+    feedbackSourceId: t?.feedbackSourceId ?? null,
+    feedbackPatientName: isFeedbackTicket ? getFeedbackPatientName(t) : null,
+    feedbackVoiceRecordingRelPath: t?.feedbackVoiceRecordingRelPath ?? null,
     dueAt: computeDueAt(t),
   };
 };
@@ -1177,8 +1185,9 @@ const closeTicket = async (id, user) => {
     throw new ApiError(StatusCodes.CONFLICT, 'Only resolved tickets can be closed');
   }
 
+  const isFeedbackTicket = isFeedbackTicketRecord(ticket);
   const isAdmin = user.role === Role.ADMIN;
-  if (!isAdmin && !ticket.requesterResolutionConfirmedAt) {
+  if (!isFeedbackTicket && !isAdmin && !ticket.requesterResolutionConfirmedAt) {
     throw new ApiError(
       StatusCodes.CONFLICT,
       'The requester must confirm that the resolution worked before this ticket can be closed.',
@@ -1189,7 +1198,14 @@ const closeTicket = async (id, user) => {
   ticket.status = TicketStatus.CLOSED;
   ticket.closedAt = new Date();
   await ticket.save();
-  await createActivityLog(null, { ticketId: ticket._id, userId: user.id, action: 'CLOSED', oldValue: oldStatus, newValue: ticket.status, remarks: 'Ticket closed' });
+  await createActivityLog(null, {
+    ticketId: ticket._id,
+    userId: user.id,
+    action: 'CLOSED',
+    oldValue: oldStatus,
+    newValue: ticket.status,
+    remarks: isFeedbackTicket ? 'Feedback ticket closed by staff' : 'Ticket closed',
+  });
   const full = await populateTicket(Ticket.findById(ticket._id)).lean();
   return shapeTicket(full);
 };
@@ -1199,6 +1215,13 @@ const REQUESTER_CONFIRM_NOTE_MAX_LEN = 500;
 const confirmResolutionAndClose = async (id, payload, user) => {
   const ticket = await getTicketDocOrThrow(id);
   ensureCanViewTicket(user, ticket);
+
+  if (isFeedbackTicketRecord(ticket)) {
+    throw new ApiError(
+      StatusCodes.CONFLICT,
+      'Feedback tickets do not wait for requester confirmation. Close the ticket directly after responding.'
+    );
+  }
 
   const requesterId = ticket.requesterId?.toString?.() ?? String(ticket.requesterId ?? '');
   const userId = String(user?.id ?? '');

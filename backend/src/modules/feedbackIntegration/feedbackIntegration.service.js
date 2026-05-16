@@ -152,7 +152,7 @@ async function ensureDepartmentSubcategory(categoryId, feedbackDepartmentName) {
   return subcategory;
 }
 
-async function resolveRequesterUserId() {
+async function resolveFeedbackAuditActorUserId() {
   const configured = String(process.env.FEEDBACK_INGEST_REQUESTER_USER_ID || '').trim();
   if (configured && mongoose.Types.ObjectId.isValid(configured)) {
     const user = await User.findOne({ _id: configured, isActive: true }).select('_id').lean();
@@ -166,7 +166,7 @@ async function resolveRequesterUserId() {
   if (!fallback?._id) {
     throw new ApiError(
       StatusCodes.SERVICE_UNAVAILABLE,
-      'No TMS user available for feedback ingest — set FEEDBACK_INGEST_REQUESTER_USER_ID or seed a REQUESTER user'
+      'No TMS user available for feedback ingest audit logs — set FEEDBACK_INGEST_REQUESTER_USER_ID or seed a REQUESTER user'
     );
   }
   return fallback._id;
@@ -199,7 +199,8 @@ const createTicketFromFeedback = async (feedback) => {
   const { title, prompt } = summarizeForTms(feedback);
   const priority = mapPriorityFromFeedback(feedback);
   const ticketNumber = await generateTicketNumber(String(category.code || 'GEN').toUpperCase());
-  const requesterId = await resolveRequesterUserId();
+  const auditActorUserId = await resolveFeedbackAuditActorUserId();
+  const feedbackPatientName = String(feedback?.patientName || '').trim() || 'Patient';
 
   const voiceRel = feedback.voiceRecordingRelPath
     ? String(feedback.voiceRecordingRelPath).replace(/^\/+/, '')
@@ -219,16 +220,17 @@ const createTicketFromFeedback = async (feedback) => {
     subcategoryId: subcategory._id,
     locationId: null,
     locationText: null,
-    requesterId,
+    requesterId: null,
     assignedToId: null,
     telecomNumber: null,
     feedbackSourceId: sourceId || null,
+    feedbackPatientName,
     feedbackVoiceRecordingRelPath: voiceRel || null,
   });
 
   await createActivityLog(null, {
     ticketId: ticket._id,
-    userId: requesterId,
+    userId: auditActorUserId,
     action: 'CREATED',
     remarks: 'Ticket created from Feedback System (HTTP integration)',
   });

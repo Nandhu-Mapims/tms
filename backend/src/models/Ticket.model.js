@@ -19,7 +19,8 @@ const ticketSchema = new mongoose.Schema(
     locationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location', default: null },
     /** Raw location text inferred from prompt (even if it doesn't match a Location DB row). */
     locationText: { type: String, default: null },
-    requesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    /** Null for feedback-ingested tickets that came from patients without TMS logins. */
+    requesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     assignedToId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     telecomNumber: { type: String, default: null },
 
@@ -36,6 +37,7 @@ const ticketSchema = new mongoose.Schema(
 
     /** Set when synced from Feedback System — used to stream /uploads/... from that origin. */
     feedbackSourceId: { type: String, default: null },
+    feedbackPatientName: { type: String, default: null, trim: true },
     feedbackVoiceRecordingRelPath: { type: String, default: null },
   },
   { timestamps: true }

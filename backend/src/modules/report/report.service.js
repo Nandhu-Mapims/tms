@@ -16,34 +16,46 @@ const populateTicket = (query) =>
     .populate({ path: 'requesterId', select: 'fullName email role empId' })
     .populate({ path: 'assignedToId', select: 'fullName email role empId' });
 
+const isFeedbackTicketRecord = (ticket) =>
+  Boolean(String(ticket?.feedbackSourceId ?? '').trim() || String(ticket?.feedbackPatientName ?? '').trim());
+
 const closureSummary = (t) => {
   const status = t?.status;
   if (status !== TicketStatus.CLOSED) return null;
   if (t?.requesterResolutionConfirmedAt) {
     return 'Closed after requester confirmation';
   }
+  if (isFeedbackTicketRecord(t)) {
+    return 'Closed by staff (feedback ticket)';
+  }
   return 'Closed by staff or administrator';
 };
 
-const shape = (t) => ({
-  ...(t ?? {}),
-  id: t?._id?.toString?.() ?? t?.id,
-  department: t?.departmentId ?? null,
-  requesterDepartment: t?.requesterDepartmentId ?? null,
-  category: t?.categoryId ?? null,
-  subcategory: t?.subcategoryId ?? null,
-  location: t?.locationId ?? null,
-  requester: t?.requesterId ?? null,
-  assignedTo: t?.assignedToId ?? null,
-  departmentId: t?.departmentId?._id?.toString?.() ?? t?.departmentId ?? null,
-  requesterDepartmentId: t?.requesterDepartmentId?._id?.toString?.() ?? t?.requesterDepartmentId ?? null,
-  categoryId: t?.categoryId?._id?.toString?.() ?? t?.categoryId ?? null,
-  subcategoryId: t?.subcategoryId?._id?.toString?.() ?? t?.subcategoryId ?? null,
-  locationId: t?.locationId?._id?.toString?.() ?? t?.locationId ?? null,
-  requesterId: t?.requesterId?._id?.toString?.() ?? t?.requesterId ?? null,
-  assignedToId: t?.assignedToId?._id?.toString?.() ?? t?.assignedToId ?? null,
-  closureSummary: closureSummary(t),
-});
+const shape = (t) => {
+  const isFeedbackTicket = isFeedbackTicketRecord(t);
+  return {
+    ...(t ?? {}),
+    id: t?._id?.toString?.() ?? t?.id,
+    department: t?.departmentId ?? null,
+    requesterDepartment: t?.requesterDepartmentId ?? null,
+    category: t?.categoryId ?? null,
+    subcategory: t?.subcategoryId ?? null,
+    location: t?.locationId ?? null,
+    requester: t?.requesterId ?? null,
+    assignedTo: t?.assignedToId ?? null,
+    departmentId: t?.departmentId?._id?.toString?.() ?? t?.departmentId ?? null,
+    requesterDepartmentId: t?.requesterDepartmentId?._id?.toString?.() ?? t?.requesterDepartmentId ?? null,
+    categoryId: t?.categoryId?._id?.toString?.() ?? t?.categoryId ?? null,
+    subcategoryId: t?.subcategoryId?._id?.toString?.() ?? t?.subcategoryId ?? null,
+    locationId: t?.locationId?._id?.toString?.() ?? t?.locationId ?? null,
+    requesterId: t?.requesterId?._id?.toString?.() ?? t?.requesterId ?? null,
+    assignedToId: t?.assignedToId?._id?.toString?.() ?? t?.assignedToId ?? null,
+    isFeedbackTicket,
+    feedbackPatientName: isFeedbackTicket ? String(t?.feedbackPatientName ?? '').trim() || 'Patient' : null,
+    feedbackSourceId: t?.feedbackSourceId ?? null,
+    closureSummary: closureSummary(t),
+  };
+};
 
 const resolveSort = (query = {}) => {
   const raw = String(query.sort ?? '').trim().toLowerCase();
@@ -179,11 +191,11 @@ const getTicketReportExport = async (query, user) => {
       r.title ?? '',
       r.description ?? '',
       r.department?.name ?? '',
-      r.requesterDepartment?.name ?? r.department?.name ?? '',
+      r.isFeedbackTicket ? 'Patient' : r.requesterDepartment?.name ?? r.department?.name ?? '',
       r.assignedTo?.fullName ?? '',
       r.assignedTo?.empId ?? '',
-      r.requester?.fullName ?? '',
-      r.requester?.empId ?? '',
+      r.isFeedbackTicket ? r.feedbackPatientName ?? 'Patient' : r.requester?.fullName ?? '',
+      r.isFeedbackTicket ? '' : r.requester?.empId ?? '',
       r.status ?? '',
       r.priority ?? '',
       r.resolvedAt ?? '',

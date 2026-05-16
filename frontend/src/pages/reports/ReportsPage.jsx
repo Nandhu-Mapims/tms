@@ -459,7 +459,7 @@ function ReportsPage() {
                           {row.description ? <div className="small text-secondary text-truncate">{row.description}</div> : null}
                         </td>
                         <td>{row.department?.name ?? '—'}</td>
-                        <td>{row.requesterDepartment?.name ?? row.department?.name ?? '—'}</td>
+                        <td>{row.isFeedbackTicket ? 'Patient' : row.requesterDepartment?.name ?? row.department?.name ?? '—'}</td>
                         <td>
                           {row.assignedTo?.fullName ? (
                             <span>
@@ -471,7 +471,9 @@ function ReportsPage() {
                           )}
                         </td>
                         <td>
-                          {row.requester?.fullName ? (
+                          {row.isFeedbackTicket ? (
+                            <span>{row.feedbackPatientName || 'Patient'}</span>
+                          ) : row.requester?.fullName ? (
                             <span>
                               {row.requester.fullName}
                               {row.requester?.empId ? <span className="text-secondary small ms-1">({row.requester.empId})</span> : null}
@@ -540,7 +542,9 @@ function ReportsPage() {
                         <div>
                           <div className="entity-mobile-field-label">Raised by</div>
                           <div className="text-dark">
-                            {row.requester?.fullName ? (
+                            {row.isFeedbackTicket ? (
+                              <span>{row.feedbackPatientName || 'Patient'}</span>
+                            ) : row.requester?.fullName ? (
                               <span>
                                 {row.requester.fullName}
                                 {row.requester?.empId ? <span className="text-secondary small ms-1">({row.requester.empId})</span> : null}
