@@ -348,8 +348,20 @@ const inferIssueType = (prompt, aiIssueType = null) => {
   return 'UNKNOWN';
 };
 
-const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_REQUEST_TIMEOUT_MS = 45_000;
+const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_REQUEST_TIMEOUT_MS = 45_000;
+
+const openRouterHeaders = (apiKey) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  };
+  const referer = String(appEnv?.openRouterHttpReferer ?? '').trim();
+  const title = String(appEnv?.openRouterAppTitle ?? 'MAPIMS Ticket Management').trim();
+  if (referer) headers['HTTP-Referer'] = referer;
+  headers['X-Title'] = title;
+  return headers;
+};
 
 const parseAiJsonResponse = (rawText) => {
   const text = String(rawText ?? '').trim();
@@ -363,7 +375,7 @@ const parseAiJsonResponse = (rawText) => {
   }
 };
 
-const buildGroqClassificationPrompt = ({ prompt, departments, categories, subcategories, locations }) =>
+const buildOpenRouterClassificationPrompt = ({ prompt, departments, categories, subcategories, locations }) =>
   [
     'Classify this hospital ticket. Return a single JSON object only, no markdown.',
     'Valid priorities: LOW, MEDIUM, HIGH, CRITICAL.',
@@ -377,12 +389,12 @@ const buildGroqClassificationPrompt = ({ prompt, departments, categories, subcat
     'JSON shape: {"department":"...","category":"...","subcategory":"...","priority":"...","issueType":"...","location":"... or null","telecomNumber":"... or null"}',
   ].join('\n');
 
-const inferClassificationWithGroq = async ({ prompt, departments, categories, subcategories, locations }) => {
-  const apiKey = String(appEnv?.groqApiKey ?? '').trim();
+const inferClassificationWithOpenRouter = async ({ prompt, departments, categories, subcategories, locations }) => {
+  const apiKey = String(appEnv?.openRouterApiKey ?? '').trim();
   if (!apiKey) return null;
 
-  const model = String(appEnv?.groqModel ?? 'llama-3.3-70b-versatile').trim();
-  const userContent = buildGroqClassificationPrompt({
+  const model = String(appEnv?.openRouterModel ?? 'meta-llama/llama-3.3-70b-instruct').trim();
+  const userContent = buildOpenRouterClassificationPrompt({
     prompt,
     departments,
     categories,
@@ -400,14 +412,11 @@ const inferClassificationWithGroq = async ({ prompt, departments, categories, su
   };
 
   try {
-    const response = await fetch(GROQ_CHAT_URL, {
+    const response = await fetch(OPENROUTER_CHAT_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: openRouterHeaders(apiKey),
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(GROQ_REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(OPENROUTER_REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) return null;
     const json = await response.json();
@@ -430,7 +439,7 @@ const inferTicketClassification = async (prompt) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Master data is incomplete. Please configure departments, categories, and subcategories.');
   }
 
-  const ai = await inferClassificationWithGroq({ prompt, departments, categories, subcategories, locations });
+  const ai = await inferClassificationWithOpenRouter({ prompt, departments, categories, subcategories, locations });
   if (!ai) {
     throw new ApiError(StatusCodes.SERVICE_UNAVAILABLE, 'AI classification is temporarily unavailable. Please try again.');
   }

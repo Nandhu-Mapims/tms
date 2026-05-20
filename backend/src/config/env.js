@@ -18,6 +18,10 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN,
   clientUrl: process.env.CLIENT_URL,
   bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS) || 10,
-  groqApiKey: process.env.GROQ_API_KEY || '',
-  groqModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+  openRouterApiKey: process.env.OPENROUTER_API_KEY || '',
+  openRouterModel:
+    process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct',
+  openRouterHttpReferer: process.env.OPENROUTER_HTTP_REFERER || '',
+  openRouterAppTitle:
+    process.env.OPENROUTER_APP_TITLE || 'MAPIMS Ticket Management',
 };
