@@ -3,19 +3,6 @@ export const APP_SUBTITLE = 'Hospital Ticket Management System';
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 export const API_PUBLIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
-/** Where Feedback serves `/uploads/...` for voice. Prefer `VITE_FEEDBACK_SYSTEM_ORIGIN` at build time. */
-export function getFeedbackSystemOrigin() {
-  const fromEnv = (import.meta.env.VITE_FEEDBACK_SYSTEM_ORIGIN || '').trim();
-  if (fromEnv) return fromEnv;
-  if (typeof window !== 'undefined') {
-    const h = window.location.hostname;
-    if (h === 'tms.mapims.edu.in') {
-      return 'https://feedback.mapims.edu.in';
-    }
-  }
-  return '';
-}
-
 export const ROLE_LABELS = {
   ADMIN: 'Administrator',
   CHIEF: 'Chief',
@@ -37,13 +24,6 @@ export const NAV_ITEMS = [
     label: 'Tickets',
     icon: 'bi-file-earmark-medical',
     path: '/tickets',
-    roles: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD', 'REQUESTER'],
-  },
-  {
-    key: 'feedback-tickets',
-    label: 'Feedback Tickets',
-    icon: 'bi-chat-left-text',
-    path: '/feedback-tickets',
     roles: ['ADMIN', 'CHIEF', 'HELPDESK', 'HOD', 'REQUESTER'],
   },
   {

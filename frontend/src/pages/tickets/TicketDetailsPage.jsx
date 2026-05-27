@@ -42,7 +42,6 @@ import {
   getTimeTakenLabel,
 } from '../../utils/ticketHelpers';
 import { getErrorMessage } from '../../utils/getErrorMessage';
-import { getFeedbackSystemOrigin } from '../../config/appConfig';
 
 const CHAT_POLL_INTERVAL_MS = 10_000;
 const PRIORITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -476,12 +475,7 @@ function TicketDetailsPage() {
     ? 'Patient'
     : ticket?.requesterDepartment?.name || ticket?.department?.name || 'Not available';
 
-  const feedbackVoiceSrc = (() => {
-    const rel = String(ticket?.feedbackVoiceRecordingRelPath ?? '').trim();
-    const origin = getFeedbackSystemOrigin().replace(/\/$/, '');
-    if (!rel || !origin) return null;
-    return `${origin}/uploads/${rel.replace(/^\/+/, '')}`;
-  })();
+  const feedbackVoiceSrc = null;
 
   const handleCancelOutgoingTransferRequest = () => {
     if (!outgoingTransferRequest?.id) return;
@@ -1208,9 +1202,7 @@ function TicketDetailsPage() {
                         </>
                       ) : (
                         <p className="text-muted small mb-0">
-                          Voice file path is stored on this ticket but the Feedback server URL is unknown. Set{' '}
-                          <code>VITE_FEEDBACK_SYSTEM_ORIGIN</code> (e.g. https://feedback.mapims.edu.in) in the TMS frontend
-                          build, or open this app on <code>tms.mapims.edu.in</code> for the default pairing.
+                          Feedback voice playback integration has been removed.
                         </p>
                       )}
                     </div>
